@@ -6,9 +6,9 @@
 //
 
 import Foundation
-import SwiftECC
 import BigInt
-import CryptoKit // Add this import to use HKDF
+import CryptoKit
+import OSLog
 
 public class OpaqueClient {
     private let oprfCurve: OprfCurve
@@ -40,13 +40,13 @@ public class OpaqueClient {
 
     // Registration request returned to the server containing the serialized blinded element
     public struct RegistrationRequest: Equatable {
-        public let blindedMessage: Bytes
-        public init(blindedMessage: Bytes) {
+        public let blindedMessage: Data
+        public init(blindedMessage: Data) {
             self.blindedMessage = blindedMessage
         }
 
         var data: Data {
-            return Data(self.blindedMessage)
+            return self.blindedMessage
         }
     }
 
@@ -86,7 +86,7 @@ public class OpaqueClient {
                 throw OpaqueRegistrationRecordError.RegistrationRecordRecoveryError("Invalid data, got \(data.count) bytes, expected >= \(keyLength + hashLength)")
             }
             var offset = 0
-            let clientPublicKey = OpaquePublicKey(data.subdata(in: offset..<offset + keyLength).bytes)
+            let clientPublicKey = OpaquePublicKey(data.subdata(in: offset..<offset + keyLength))
             offset += keyLength
             let maskingKey = data.subdata(in: offset..<offset + hashLength)
             offset += hashLength
@@ -102,14 +102,14 @@ public class OpaqueClient {
     }
 
     public struct CredentialRequest: Equatable {
-        public let blindedMessage: Bytes
+        public let blindedMessage: Data
 
-        public init(blindedMessage: Bytes) {
+        public init(blindedMessage: Data) {
             self.blindedMessage = blindedMessage
         }
 
         var data: Data {
-            return Data(self.blindedMessage)
+            return self.blindedMessage
         }
     }
 
@@ -261,12 +261,27 @@ public class OpaqueClient {
     /// - Throws: An error if the KE1 generation process fails.
     public func GenerateKE1(password: Data) throws -> KE1WithState {
         // Create a credential request using the client's password
-        let (credentialRequest, blind) = try CreateCredentialRequest(password: password)
+        let clock = ContinuousClock()
 
-        // Start the authentication process and generate KE1
-        let (ke1, clientSecret) = try AuthClientStart(credentialRequest)
+        var credentialRequest: CredentialRequest? = nil
+        var blind: BInt? = nil
 
-        return KE1WithState(ke1: ke1, clientSecret: clientSecret, blind: blind, password: password)
+        let t1 = try clock.measure {
+            (credentialRequest, blind) = try CreateCredentialRequest(password: password)
+        }
+
+        var ke1: KE1? = nil
+        var clientSecret: OpaqueSecretKey? = nil
+
+        let t2 = try clock.measure {
+            // Start the authentication process and generate KE1
+            (ke1, clientSecret) = try AuthClientStart(credentialRequest!)
+        }
+
+        let timings = "create request \(OpaqueUtils.formatDuration(t1)), AuthClientStart \(OpaqueUtils.formatDuration(t2))"
+        Logger.opaque.debug("\(#function) Timings for GenerateKE1 (\(self.oprfCurve.ecCurve.description)): \(timings)")
+
+        return KE1WithState(ke1: ke1!, clientSecret: clientSecret!, blind: blind!, password: password)
     }
 
     func CreateCredentialRequest(password: Data) throws -> (CredentialRequest, BInt) {
@@ -395,7 +410,7 @@ public class OpaqueClient {
         // Recover the server public key and envelope
         let maskedResponse = response.maskedResponse
         let unmaskedData = try H2cUtils.xor(credentialResponsePad, maskedResponse)
-        let serverPublicKey = OpaquePublicKey(unmaskedData.prefix(keyLength).bytes)
+        let serverPublicKey = OpaquePublicKey(unmaskedData.prefix(keyLength))
         let envelopeData = unmaskedData.suffix(unmaskedData.count - keyLength)
         let envelope = try OpaqueEnvelope.Envelope(fromData: envelopeData, nonceLength: nonceLength, hashLength: hashLength)
 

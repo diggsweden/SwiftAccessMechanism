@@ -132,6 +132,7 @@ struct SwiftAccessMechanismTests {
         // not known from the RFC but rather empirically from this implementation (?).
         let dst = "QUUX-V01-CS02-with-P256_XMD:SHA-256_SSWU_RO_".data(using: .utf8)
         let domain = getDomain()
+        let ecCurve = SwiftECCurve(domain: Domain.instance(curve: .EC256r1))
         let order = domain.p
         let Z = BInt("ffffffff00000001000000000000000000000000fffffffffffffffffffffff5", radix: 16)
         let L = domain.getCurveLsize(targetSecurityLevelBits: 128)
@@ -140,8 +141,8 @@ struct SwiftAccessMechanismTests {
         let s = 128
         let messageExpansion = try XmdMessageExpansion(digestAlgo: SHA256Algorithm(), securityLevelBits: s)
         let hash2Field = GenericHashToField(dst: dst!, messageExpansion: messageExpansion, L: L, m: m, order: order)
-        let map2Curve = SVDWostijneMapToCurve(curve: domain, Z_constant: Z!)
-        let h2c = Hash2Curve(curve: domain, hash2Field: hash2Field, map2Curve: map2Curve, messageExpansion: messageExpansion)
+        let map2Curve = SVDWostijneMapToCurve(curve: domain, ecCurve: ecCurve,Z_constant: Z!)
+        let h2c = Hash2Curve(curve: domain, ecCurve: ecCurve, hash2Field: hash2Field, map2Curve: map2Curve, messageExpansion: messageExpansion)
 
         let fieldBits = domain.p.bitWidth
         print("Field size in bits: \(fieldBits)")
@@ -160,9 +161,10 @@ struct SwiftAccessMechanismTests {
 
 
     @Test func testOprfCurves() throws {
-
         let p256Oprf = try OprfCurve(
-            profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO)
+            profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO,
+            ecCurve: SwiftECCurve(domain: Domain.instance(curve: .EC256r1))
+        )
         print ("Testing P-256")
 
         try profileH2cIndividualMessages("", p256Oprf,
@@ -176,7 +178,9 @@ struct SwiftAccessMechanismTests {
                                          expectedScalar: "e83e763a2a7fd74793ec272a9d2ae4c6020fbf724416f06845617b886b16e4f6")
 
         let p384Oprf = try OprfCurve(
-            profile: Hash2CurveProfile.P384_XMD_SHA_384_SSWU_RO)
+            profile: Hash2CurveProfile.P384_XMD_SHA_384_SSWU_RO,
+            ecCurve: SwiftECCurve(domain: Domain.instance(curve: .EC384r1))
+        )
         print ("Testing P-384")
 
         try profileH2cIndividualMessages("", p384Oprf,
@@ -189,7 +193,9 @@ struct SwiftAccessMechanismTests {
                                          expectedPoint: "024ab60906540b6326b69d83b0deb32591c51ad4a7eb949c0eff42aa4d033529b1712fdfa5125ddc789c73956c1cbbf261",
                                          expectedScalar: "8f149d91c2809297c5ccc7d5b24ed3ba39998ca8834c5b3ead45edfadf215f9d4ccad9c50d787fb917e909c33c5ee5e6")
         let p521Oprf = try OprfCurve(
-            profile: Hash2CurveProfile.P521_XMD_SHA_512_SSWU_RO)
+            profile: Hash2CurveProfile.P521_XMD_SHA_512_SSWU_RO,
+            ecCurve: SwiftECCurve(domain: Domain.instance(curve: .EC521r1))
+        )
         print ("Testing P-521")
 
         try profileH2cIndividualMessages("", p521Oprf,

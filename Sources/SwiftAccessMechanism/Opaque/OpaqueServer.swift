@@ -7,7 +7,6 @@
 
 import Foundation
 import BigInt
-import SwiftECC
 import CryptoKit
 
 public class OpaqueServer {
@@ -42,24 +41,23 @@ public class OpaqueServer {
         self.oprfCurve = oprfCurve
         self.skS = skS
         self.keyDerivation = keyDerivation
-        let pkS = try! oprfCurve.profile.curve.multiplyPoint(oprfCurve.profile.curve.g, skS.value)
-        self.serializedPkS = try! OpaquePublicKey(oprfCurve.serializeElement(pkS))
+        self.serializedPkS = try! OpaquePublicKey(oprfCurve.computePublicKey(curve: oprfCurve.ecCurve, skS: skS.value))
         self.hash = hash
         self.context = context
     }
 
     // Registration response returned to the client containing the serialized evaluated element and server public key
     public struct RegistrationResponse: Equatable {
-        public let evaluatedMessage: Bytes
+        public let evaluatedMessage: Data
         public let serverPublicKey: OpaquePublicKey
 
-        public init(evaluatedMessage: Bytes, serverPublicKey: OpaquePublicKey) {
+        public init(evaluatedMessage: Data, serverPublicKey: OpaquePublicKey) {
             self.evaluatedMessage = evaluatedMessage
             self.serverPublicKey = serverPublicKey
         }
 
         var data: Data {
-            return Data(evaluatedMessage) + serverPublicKey.data
+            return evaluatedMessage + serverPublicKey.data
         }
     }
 
@@ -82,18 +80,18 @@ public class OpaqueServer {
 
     /// Represents a credential response sent by the server.
     public struct CredentialResponse: Equatable {
-        public let evaluatedMessage: Bytes
+        public let evaluatedMessage: Data
         public let maskingNonce: Data
         public let maskedResponse: Data
 
-        public init(evaluatedMessage: Bytes, maskingNonce: Data, maskedResponse: Data) {
+        public init(evaluatedMessage: Data, maskingNonce: Data, maskedResponse: Data) {
             self.evaluatedMessage = evaluatedMessage
             self.maskingNonce = maskingNonce
             self.maskedResponse = maskedResponse
         }
 
         var data: Data {
-            return Data(evaluatedMessage) + maskingNonce + maskedResponse
+            return evaluatedMessage + maskingNonce + maskedResponse
         }
     }
 

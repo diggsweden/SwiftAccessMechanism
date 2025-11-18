@@ -8,6 +8,9 @@
 import Foundation
 import BigInt
 import SwiftECC
+import OSLog
+
+
 
 // Extension to convert a hex string to Data
 extension Data {
@@ -106,4 +109,13 @@ extension Point {
             return "ERROR"
         }
     }
+}
+
+
+/// Set up subsystem loggers to be able to filter messages
+extension Logger {
+    private static let subsystem = "se.digg.wallet.AccessMechanism"
+
+    static let opaque = Logger(subsystem: subsystem, category: "Opaque")
+    static let oprf = Logger(subsystem: subsystem, category: "OPRF")
 }

@@ -42,7 +42,8 @@ struct Hash2FieldTests {
         // RFC 9380, section J.1.1. P256_XMD:SHA-256_SSWU_RO_
 
         let dst = "QUUX-V01-CS02-with-P256_XMD:SHA-256_SSWU_RO_".data(using: .utf8)!
-        let h2c = try Hash2Curve(profile: .P256_XMD_SHA_256_SSWU_RO, domainSeparatorTag: dst)
+        let ecCurve = SwiftECCurve(domain: Domain.instance(curve: .EC256r1))
+        let h2c = try Hash2Curve(profile: .P256_XMD_SHA_256_SSWU_RO, domainSeparatorTag: dst, ecCurve: ecCurve)
 
         let testVectors: [TestVector] = [
             TestVector(
@@ -71,7 +72,8 @@ struct Hash2FieldTests {
         // RFC 9380, section J.2.1, P384_XMD:SHA-384_SSWU_RO_
 
         let dst = "QUUX-V01-CS02-with-P384_XMD:SHA-384_SSWU_RO_".data(using: .utf8)!
-        let h2c = try Hash2Curve(profile: .P384_XMD_SHA_384_SSWU_RO, domainSeparatorTag: dst)
+        let ecCurve = SwiftECCurve(domain: Domain.instance(curve: .EC384r1))
+        let h2c = try Hash2Curve(profile: .P384_XMD_SHA_384_SSWU_RO, domainSeparatorTag: dst, ecCurve: ecCurve)
 
         let testVectors: [TestVector] = [
             TestVector(
@@ -100,7 +102,8 @@ struct Hash2FieldTests {
         // RFC 9380, section J.3.1, P521_XMD:SHA-512_SSWU_RO_
 
         let dst = "QUUX-V01-CS02-with-P521_XMD:SHA-512_SSWU_RO_".data(using: .utf8)!
-        let h2c = try Hash2Curve(profile: .P521_XMD_SHA_512_SSWU_RO, domainSeparatorTag: dst)
+        let ecCurve = SwiftECCurve(domain: Domain.instance(curve: .EC521r1))
+        let h2c = try Hash2Curve(profile: .P521_XMD_SHA_512_SSWU_RO, domainSeparatorTag: dst, ecCurve: ecCurve)
 
         let testVectors: [TestVector] = [
             TestVector(

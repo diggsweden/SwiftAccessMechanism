@@ -14,7 +14,10 @@ import SwiftECC
 struct OprfCurveTests {
 
     @Test func testP256() throws {
-        let oprfCurve = try OprfCurve(profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO)
+        let oprfCurve = try OprfCurve(
+            profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO,
+            ecCurve: SwiftECCurve(domain: Domain.instance(curve: .EC256r1))
+        )
         let scalar = try oprfCurve.hash2Scalar("Test".data(using: .utf8)!)
         let curve = oprfCurve.profile.curve
         let g = curve.g
@@ -50,7 +53,10 @@ struct OprfCurveTests {
     }
 
     @Test func testP521() throws {
-        let oprfCurve = try OprfCurve(profile: Hash2CurveProfile.P521_XMD_SHA_512_SSWU_RO)
+        let oprfCurve = try OprfCurve(
+            profile: Hash2CurveProfile.P521_XMD_SHA_512_SSWU_RO,
+            ecCurve: SwiftECCurve(domain: Domain.instance(curve: .EC521r1))
+        )
         let scalar = try oprfCurve.hash2Scalar("Test".data(using: .utf8)!)
         let curve = oprfCurve.profile.curve
         let g = curve.g
@@ -81,7 +87,10 @@ struct OprfCurveTests {
     }
 
     @Test func testBlindWithVectors_P256() throws {
-        let oprfCurve = try OprfCurve(profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO)
+        let oprfCurve = try OprfCurve(
+            profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO,
+            ecCurve: SwiftECCurve(domain: Domain.instance(curve: .EC256r1))
+        )
 
         // Vectors from RFC9497, A.3.  P256-SHA256 - OPRF Mode
         let testVectors = [
@@ -108,7 +117,10 @@ struct OprfCurveTests {
     }
 
     @Test func testBlindWithVectors_P384() throws {
-        let oprfCurve = try OprfCurve(profile: Hash2CurveProfile.P384_XMD_SHA_384_SSWU_RO)
+        let oprfCurve = try OprfCurve(
+            profile: Hash2CurveProfile.P384_XMD_SHA_384_SSWU_RO,
+            ecCurve: SwiftECCurve(domain: Domain.instance(curve: .EC384r1))
+        )
 
         // Vectors from RFC9497, A.4.  P384-SHA256 - OPRF Mode
         let testVectors = [
@@ -135,7 +147,10 @@ struct OprfCurveTests {
     }
 
     @Test func testBlindWithVectors_P521() throws {
-        let oprfCurve = try OprfCurve(profile: Hash2CurveProfile.P521_XMD_SHA_512_SSWU_RO)
+        let oprfCurve = try OprfCurve(
+            profile: Hash2CurveProfile.P521_XMD_SHA_512_SSWU_RO,
+            ecCurve: SwiftECCurve(domain: Domain.instance(curve: .EC521r1))
+        )
 
         // Vectors from RFC9497, A.5.  P521-SHA256 - OPRF Mode
         let testVectors = [
@@ -162,7 +177,10 @@ struct OprfCurveTests {
     }
 
     @Test func testDeserializeInfinity() throws {
-        let oprfCurve = try OprfCurve(profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO)
+        let oprfCurve = try OprfCurve(
+            profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO,
+            ecCurve: SwiftECCurve(domain: Domain.instance(curve: .EC256r1))
+        )
         let infinityData = Data([0x00])
         let infinityBytes: [UInt8] = [0x00]
 
@@ -176,7 +194,10 @@ struct OprfCurveTests {
     }
 
     @Test func testSerializeDeserializeRoundtrip() throws {
-        let oprfCurve = try OprfCurve(profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO)
+        let oprfCurve = try OprfCurve(
+            profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO,
+            ecCurve: SwiftECCurve(domain: Domain.instance(curve: .EC256r1))
+        )
         let curve = oprfCurve.profile.curve
         let g = curve.g
 
@@ -192,7 +213,10 @@ struct OprfCurveTests {
     }
 
     @Test func testDeserializeInvalidBytes() throws {
-        let oprfCurve = try OprfCurve(profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO)
+        let oprfCurve = try OprfCurve(
+            profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO,
+            ecCurve: SwiftECCurve(domain: Domain.instance(curve: .EC256r1))
+        )
 
         // Take a valid point and change one byte to make it invalid
         let encoded = try oprfCurve.serializeElement(oprfCurve.profile.curve.g)
@@ -211,10 +235,16 @@ struct OprfCurveTests {
 
     @Test func testDeserializePointFromOtherCurve() throws {
         // Create a P384 point and try to decode it with a P256 OPRF curve
-        let otherOprf = try OprfCurve(profile: Hash2CurveProfile.P384_XMD_SHA_384_SSWU_RO)
+        let otherOprf = try OprfCurve(
+            profile: Hash2CurveProfile.P384_XMD_SHA_384_SSWU_RO,
+            ecCurve: SwiftECCurve(domain: Domain.instance(curve: .EC384r1))
+        )
         let otherEncoded = try otherOprf.serializeElement(otherOprf.profile.curve.g)
 
-        let oprfCurve = try OprfCurve(profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO)
+        let oprfCurve = try OprfCurve(
+            profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO,
+            ecCurve: SwiftECCurve(domain: Domain.instance(curve: .EC256r1))
+        )
         let encoded = try oprfCurve.serializeElement(oprfCurve.profile.curve.g)
 
         // Decoding P384-encoded point with P256 domain should fail (decode error)
@@ -231,7 +261,9 @@ struct OprfCurveTests {
         let keyInfo = Data("test key".utf8)
         let expectedSkSmHex = "159749d750713afe245d2d39ccfaae8381c53ce92d098a9375ee70739c7ac0bf"
 
-        let oprfCurve = try OprfCurve(profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO)
+        let oprfCurve = try OprfCurve(profile: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO,
+                                      ecCurve: SwiftECCurve(domain: Domain.instance(curve: .EC256r1))
+        )
 
         let (skSm, _) = try oprfCurve.deriveKeyPair(seed: seed, info: keyInfo)
 

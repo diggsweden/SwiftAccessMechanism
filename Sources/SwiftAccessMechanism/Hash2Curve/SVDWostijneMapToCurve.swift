@@ -15,7 +15,7 @@ internal class SVDWostijneMapToCurve: MapToCurveProtocol {
     let Z: BInt
     let curve: Domain
 
-    init(curve: Domain, Z_constant Z: BInt) {
+    init(curve: Domain, ecCurve: ECCurveProtocol, Z_constant Z: BInt) {
         self.Z = Z
         self.sqrtRatioCalculator = SqrtRatioCalculator(field_order: curve.p, Z_constant: Z)
         self.curve = curve
@@ -63,9 +63,9 @@ internal class SVDWostijneMapToCurve: MapToCurveProtocol {
     }
 
     func modularInverse(_ value: BInt, modulus: BInt) -> BInt? {
-        let bigIntValue = value
-        let bigIntModulus = modulus
-        return bigIntValue.modInverse(bigIntModulus)
+        // if value and modulus aren't coprime, return nil
+        // TODO: Verify the BigInt implementation handles this for us.
+        return value.modInverse(modulus)
     }
 
 }

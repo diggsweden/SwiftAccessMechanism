@@ -29,20 +29,27 @@ public struct OpaqueSecretKey: Equatable {
     }
 
     public func toBytes() -> Bytes {
+        // REMOVE
         return self.value.asSignedBytes()
+    }
+
+    /// Convert to Data. Done differently (not a var data) to help avoid programmer mistakes.
+    /// - Returns: <#description#>
+    public func toData() -> Data {
+        return Data(self.toBytes())
     }
 }
 
 /// A distinct type for Diffie-Hellman public keys on the chosen OPRF curve
 public struct OpaquePublicKey: Equatable {
-    let value: Bytes
+    let value: Data
 
-    public init(_ value: Bytes) {
+    public init(_ value: Data) {
         self.value = value
     }
 
     var data: Data {
-        return Data(self.value)
+        return self.value
     }
 }
 
@@ -51,8 +58,7 @@ internal struct OpaqueUtils {
     static func deriveDiffieHellmanKeyPair(oprf: OprfCurve, seed: Data) throws -> (OpaqueSecretKey, OpaquePublicKey) {
         let info = Data("OPAQUE-DeriveDiffieHellmanKeyPair".utf8)
         let (skS, pkS) = try oprf.deriveKeyPair(seed: seed, info: info)
-        let serializedPkS = try oprf.serializeElement(pkS)
-        return (OpaqueSecretKey(skS), OpaquePublicKey(serializedPkS))
+        return (OpaqueSecretKey(skS), OpaquePublicKey(pkS))
     }
 
     /// The `constructPreamble` function computes the preamble required for the OPAQUE-3DH key schedule.
@@ -114,9 +120,14 @@ internal struct OpaqueUtils {
     /// - Returns: The shared secret derived from the Diffie-Hellman key exchange.
     /// - Throws: An error if the key exchange fails.
     static func diffieHellman(oprfCurve: OprfCurve, privateKey: OpaqueSecretKey, publicKey: OpaquePublicKey) throws -> Data {
-        let publicPoint = try oprfCurve.profile.curve.decodePoint(publicKey.value)
-        let res = try oprfCurve.profile.curve.multiplyPoint(publicPoint, privateKey.value)
-        return Data(try oprfCurve.profile.curve.encodePoint(res, true))
+
+        func computeDH<C: ECCurveProtocol>(curve: C, privateKey: OpaqueSecretKey, publicKey: OpaquePublicKey) throws -> Data {
+            let publicPoint = try curve.decodePoint(publicKey.value)
+            let res = try curve.multiplyPoint(publicPoint, privateKey.value)
+            return Data(try curve.encodePoint(res, compress: true))
+        }
+
+        return try computeDH(curve: oprfCurve.ecCurve, privateKey: privateKey, publicKey: publicKey)
     }
 
     /// The `deriveKeys` function computes the shared secret and MAC authentication keys for the OPAQUE-3DH key exchange protocol.
@@ -259,4 +270,14 @@ internal struct OpaqueUtils {
         )
     }
 
+    static func formatDuration(_ duration: Duration) -> String {
+        return duration.formatted(
+            .units(allowed: [.milliseconds],
+                   width: .abbreviated))
+    }
+
+    static func computePublicKey<C: ECCurveProtocol>(curve: C, skS: BInt) throws -> Data {
+        let pkS = try curve.multiplyPoint(curve.generator, skS)
+        return try curve.encodePoint(pkS, compress: true)
+    }
 }

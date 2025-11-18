@@ -65,7 +65,7 @@ struct OpaqueTests {
             envelopeNonce: Data(hex: "a921f2a014513bd8a90e477a629794e89fec12d12206dde662ebdcf65670e51f"),
             maskingNonce: Data(hex: "38fe59af0df2c79f57b8780278f5ae47355fe1f817119041951c80f612fdfc6d"),
             serverPrivateKey: OpaqueSecretKey(BInt("c36139381df63bfc91c850db0b9cfbec7a62e86d80040a41aa7725bf0e79d5e5", radix: 16)!),
-            serverPublicKey: OpaquePublicKey(Data(hex: "035f40ff9cf88aa1f5cd4fe5fd3da9ea65a4923a5594f84fd9f2092d6067784874").bytes),
+            serverPublicKey: OpaquePublicKey(Data(hex: "035f40ff9cf88aa1f5cd4fe5fd3da9ea65a4923a5594f84fd9f2092d6067784874")),
             serverNonce: Data(hex: "71cd9960ecef2fe0d0f7494986fa3d8b2bb01963537e60efb13981e138e3d4a1"),
             clientNonce: Data(hex: "ab3d33bde0e93eda72392346a7a73051110674bbf6b1b7ffab8be4f91fdaeeb1"),
             clientKeyshareSeed: Data(hex: "633b875d74d1556d2a2789309972b06db21dfcc4f5ad51d7e74d783b7cfab8dc"),
@@ -75,7 +75,7 @@ struct OpaqueTests {
         )
 
         let intermediateValues = IntermediateValues(
-            clientPublicKey: OpaquePublicKey(Data(hex: "03b218507d978c3db570ca994aaf36695a731ddb2db272c817f79746fc37ae5214").bytes),
+            clientPublicKey: OpaquePublicKey(Data(hex: "03b218507d978c3db570ca994aaf36695a731ddb2db272c817f79746fc37ae5214")),
             authKey: Data(hex: "5bd4be1602516092dc5078f8d699f5721dc1720a49fb80d8e5c16377abd0987b"),
             randomizedPassword: Data(hex: "06be0a1a51d56557a3adad57ba29c5510565dcd8b5078fa319151b9382258fb0"),
             envelope: Data(hex: "a921f2a014513bd8a90e477a629794e89fec12d12206dde662ebdcf65670e51fad30bbcfc1f8eda0211553ab9aaf26345ad59a128e80188f035fe4924fad67b8"),
@@ -97,8 +97,9 @@ struct OpaqueTests {
         )
 
 
-        let client = try OpaqueClient(oprfCurve: OprfCurve(profile: .P256_XMD_SHA_256_SSWU_RO), context: context)
-        let server = try OpaqueServer(oprfCurve: OprfCurve(profile: .P256_XMD_SHA_256_SSWU_RO), skS: inputValues.serverPrivateKey, context: context)
+        let ecCurve = SwiftECCurve(domain: Hash2CurveProfile.P256_XMD_SHA_256_SSWU_RO.curve)
+        let client = try OpaqueClient(oprfCurve: OprfCurve(profile: .P256_XMD_SHA_256_SSWU_RO, ecCurve: ecCurve), context: context)
+        let server = try OpaqueServer(oprfCurve: OprfCurve(profile: .P256_XMD_SHA_256_SSWU_RO, ecCurve: ecCurve), skS: inputValues.serverPrivateKey, context: context)
 
         //
         // Registration

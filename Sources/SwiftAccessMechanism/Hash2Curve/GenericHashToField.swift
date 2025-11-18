@@ -12,37 +12,38 @@ import SwiftECC
 internal class GenericHashToField: HashToFieldProtocol {
 
     let messageExpansion: MessageExpansionProtocol
-
     let dst: Data
-
     let L: Int
-
     let m: Int
-
     let order: BInt
 
-    /// <#Description#>
+    /// Initializes a `GenericHashToField` instance with the given parameters.
     /// - Parameters:
-    ///   - dst: Domain Separation Tag, separate usages cryptographically
-    ///   - messageExpansion: <#messageExpansion description#>
-    ///   - L: <#L description#>
-    ///   - m: <#m description#>
-    ///   - order: <#order description#>
-    ///   - count: <#count description#>
+    ///   - dst: Domain Separation Tag, used to separate cryptographic usages.
+    ///   - curve: The elliptic curve domain parameters.
+    ///   - digest: The digest algorithm used for hashing.
+    ///   - L: The output length in bytes.
+    ///   - k: The security level requested in bits.
+    convenience init(dst: Data, curve: Domain, digest: DigestAlgorithm, L: Int, securityLevelBits k: Int) throws {
+        let messageExpansion = try XmdMessageExpansion(digestAlgo: digest, securityLevelBits: k)
+        let m = curve.cofactor
+        let order = curve.order
+        self.init(dst: dst, messageExpansion: messageExpansion, L: L, m: m, order: order)
+    }
+
+    /// Initializes a `GenericHashToField` instance with the given parameters.
+    /// - Parameters:
+    ///   - dst: Domain Separation Tag, used to separate cryptographic usages.
+    ///   - messageExpansion: The message expansion mechanism to use.
+    ///   - L: The output length in bytes.
+    ///   - m: The cofactor of the elliptic curve.
+    ///   - order: The order of the elliptic curve.
     init(dst: Data, messageExpansion: MessageExpansionProtocol, L: Int, m: Int, order: BInt) {
         self.dst = dst
         self.messageExpansion = messageExpansion
         self.L = L
         self.m = m
         self.order = order
-    }
-
-    init(dst: Data, curve: Domain, digest: DigestAlgorithm, L: Int, securityLevelBits k: Int) throws {
-        self.dst = dst
-        self.L = L
-        self.messageExpansion = try XmdMessageExpansion(digestAlgo: digest, securityLevelBits: k)
-        self.m = curve.cofactor
-        self.order = curve.order
     }
 
     func process(_ message: Data, count: Int) throws -> [[BInt]] {

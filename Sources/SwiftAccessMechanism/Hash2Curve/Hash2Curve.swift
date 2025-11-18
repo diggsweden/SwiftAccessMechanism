@@ -20,18 +20,20 @@ public class Hash2Curve {
     fileprivate let hash2Field: HashToFieldProtocol
     fileprivate let map2Curve: MapToCurveProtocol
     fileprivate let curve: Domain
+    fileprivate let ecCurve: ECCurveProtocol
     internal let messageExpansion: MessageExpansionProtocol  // Used in OprfCurve
 
-    convenience public init(profile: Hash2CurveProfile, domainSeparatorTag: Data) throws {
+    convenience public init(profile: Hash2CurveProfile, domainSeparatorTag: Data, ecCurve: ECCurveProtocol) throws {
         let messageExpansion = try XmdMessageExpansion(digestAlgo: profile.digest, securityLevelBits: profile.k)
         let hash2Field = GenericHashToField(dst: domainSeparatorTag, messageExpansion: messageExpansion, L: profile.L, m: 1, order: profile.curve.p)
-        let map2Curve = SVDWostijneMapToCurve(curve: profile.curve, Z_constant: profile.Z)
+        let map2Curve = SVDWostijneMapToCurve(curve: profile.curve, ecCurve: ecCurve, Z_constant: profile.Z)
 
-        self.init(curve: profile.curve, hash2Field: hash2Field, map2Curve: map2Curve, messageExpansion: messageExpansion)
+        self.init(curve: profile.curve, ecCurve: ecCurve, hash2Field: hash2Field, map2Curve: map2Curve, messageExpansion: messageExpansion)
     }
 
-    init(curve: Domain, hash2Field: HashToFieldProtocol, map2Curve: MapToCurveProtocol, messageExpansion: MessageExpansionProtocol) {
+    init(curve: Domain, ecCurve: ECCurveProtocol, hash2Field: HashToFieldProtocol, map2Curve: MapToCurveProtocol, messageExpansion: MessageExpansionProtocol) {
         self.curve = curve
+        self.ecCurve = ecCurve
         self.hash2Field = hash2Field
         self.map2Curve = map2Curve
         self.messageExpansion = messageExpansion
@@ -57,6 +59,7 @@ public class Hash2Curve {
         let r = try curve.addPoints(q0, q1)
         let p = try curve.multiplyPoint(r, BInt(curve.cofactor))
         return Data(try curve.encodePoint(p, true))
+        // XXX RETURNERA EN Point ISTÄLLET FÖR DATA, DEN DESERIALISERAS DIREKT AV ANROPAREN (200 ms)
     }
 
     // Invoke hash2Field directly. Used in tests to test RFC test vectors.

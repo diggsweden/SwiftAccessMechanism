@@ -5,7 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "SwiftAccessMechanism",
-    platforms: [.macOS(.v11), .iOS(.v14)], // Due to the use of the CryptoKit framework (iOS 13) and HKDF (iOS 14)
+    platforms: [.macOS(.v13), .iOS(.v16)], // Due to the use of the CryptoKit framework (iOS 13) and HKDF (iOS 14), and iOS 16 for ContinousClock
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
