@@ -11,6 +11,7 @@ extension Logger {
     private static let subsystem = "se.digg.wallet.AccessMechanism"
 
     static let opaque = Logger(subsystem: subsystem, category: "Opaque")
+    static let sec = Logger(subsystem: subsystem, category: "SecureEnclave")
     static let authn = Logger(subsystem: subsystem, category: "Authn")
 }
 
