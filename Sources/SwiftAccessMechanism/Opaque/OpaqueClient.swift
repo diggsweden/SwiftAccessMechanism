@@ -7,7 +7,6 @@
 
 import Foundation
 import OSLog
-import OpaqueKE
 
 // Error types for the Opaque client
 public enum OpaqueClientError: Error {
@@ -27,26 +26,10 @@ public struct OpaqueClient {
     /// - Parameter password: The password as a string.
     /// - Returns: A tuple containing the credential request data and a client login handle for the next step.
     /// - Throws: An `OpaqueClientError` if the operation fails.
-    static public func loginStart(password: Data) throws -> (credentialRequest: Data, clientLoginHandle: ClientLoginHandle) {
-        var outRequestHandle: UnsafeMutableRawPointer? = nil
-        var outCLHandle: UnsafeMutableRawPointer? = nil
+    static public func loginStart(password: Data) throws -> ClientLoginStartResult {
 
-        let returnCode = OpaqueKEBuffer(data: password).withRawHandle { passwordHandle in
-            opaque_ke_client_login_start(passwordHandle, &outRequestHandle, &outCLHandle)
-        }
+        return try clientLoginStart(password: password)
 
-        if returnCode != 0 {
-            throw OpaqueClientError.clientStartFailure(code: returnCode)
-        }
-
-        guard let requestBuffer = OpaqueKEBuffer(handle: outRequestHandle),
-              let clientLoginHandle = OpaqueKEBuffer(handle: outCLHandle),
-              let credReq = requestBuffer.data
-        else {
-            throw OpaqueClientError.missingClientStartOutputs
-        }
-
-        return (credReq, ClientLoginHandle(clientLoginHandle))
     }
 
     /// Completes the client login process using the server's credential response.
@@ -56,62 +39,24 @@ public struct OpaqueClient {
     ///   - credentialResponse: The server's credential response data.
     /// - Returns: A tuple containing the credential finalisation data and the session key.
     /// - Throws: An `OpaqueClientError` if the operation fails.
-    static public func loginFinish(clientLoginHandle: ClientLoginHandle, password: Data, credentialResponse: Data) throws -> (credentialFinalization: Data, sessionKey: Data) {
-        var outFinalHandle: UnsafeMutableRawPointer? = nil
-        var outSessionHandle: UnsafeMutableRawPointer? = nil
+    static public func loginFinish(clientRegistration: Data, password: Data, credentialResponse: Data,
+                                   context: Data, clientIdentifier: Data, serverIdentifier: Data) throws -> ClientLoginFinishResult {
 
-        let responseBuffer = OpaqueKEBuffer(data: credentialResponse)
-        let passwordBuffer = OpaqueKEBuffer(data: password)
-
-        let returnCode = clientLoginHandle.value.withRawHandle { rawCL in
-            passwordBuffer.withRawHandle { passwordHandle in
-                responseBuffer.withRawHandle { responseHandle in
-                    opaque_ke_client_login_finish(rawCL, passwordHandle, responseHandle, &outFinalHandle, &outSessionHandle)
-                }
-            }
-        }
-
-        if returnCode != 0 {
-            throw OpaqueClientError.clientFinishFailure(code: returnCode)
-        }
-
-        guard let finalBuf = OpaqueKEBuffer(handle: outFinalHandle),
-              let sessionBuf = OpaqueKEBuffer(handle: outSessionHandle),
-              let finalData = finalBuf.data,
-              let sessionKey = sessionBuf.data
-        else {
-            throw OpaqueClientError.missingClientFinishOutputs
-        }
-
-        return (finalData, sessionKey)
+        return try clientLoginFinish(credentialResponse: credentialResponse,
+                                     clientRegistration: clientRegistration,
+                                     password: password,
+                                     context: context,
+                                     clientIdentifier: clientIdentifier,
+                                     serverIdentifier: serverIdentifier)
     }
 
     /// Starts the client registration process.
     /// - Parameter password: The password as data bytes.
     /// - Returns: A tuple containing the registration request data and a client registration handle for the next step.
     /// - Throws: An `OpaqueClientError` if the operation fails.
-    static public func registrationStart(password: Data) throws -> (request: Data, clientRegistrationHandle: OpaqueKEBuffer) {
-        var outRequestHandle: UnsafeMutableRawPointer?
-        var outClientRegistrationHandle: UnsafeMutableRawPointer?
+    static public func registrationStart(password: Data) throws -> ClientRegistrationStartResult {
 
-        // create a password buffer handle using OpaqueKEBuffer
-        let passwordBuffer = OpaqueKEBuffer(data: password)
-        let returnCode = passwordBuffer.withRawHandle { passwordHandle in
-            opaque_ke_client_registration_start(passwordHandle, &outRequestHandle, &outClientRegistrationHandle)
-        }
-
-        guard returnCode == 0 else {
-            throw OpaqueClientError.registrationStartFailure(code: returnCode)
-        }
-
-        guard let request = OpaqueKEBuffer(handle: outRequestHandle),
-              let clientRegistration = OpaqueKEBuffer(handle: outClientRegistrationHandle),
-              let requestData = request.data
-        else {
-            throw OpaqueClientError.missingRegistrationStartOutputs
-        }
-
-        return (request: requestData, clientRegistrationHandle: clientRegistration)
+        return try clientRegistrationStart(password: password)
     }
 
     /// Completes the client registration process using the server's registration response.
@@ -121,37 +66,16 @@ public struct OpaqueClient {
     ///   - registrationResponse: The server's registration response data.
     /// - Returns: A tuple containing the registration upload data to send to the server and the export key.
     /// - Throws: An `OpaqueClientError` if the operation fails.
-    static public func registrationFinish(clientRegistrationHandle: OpaqueKEBuffer,
+    static public func registrationFinish(clientRegistration: Data,
                                           password: Data,
-                                          registrationResponse: Data) throws -> (registrationUpload: Data, exportKey: Data) {
-        var outUploadHandle: UnsafeMutableRawPointer?
-        var outExportKeyHandle: UnsafeMutableRawPointer?
+                                          registrationResponse: Data,
+                                          clientIdentifier: Data,
+                                          serverIdentifier: Data) throws -> ClientRegistrationFinishResult {
 
-        // create password and response buffer handles using OpaqueKEBuffer
-        let passwordBuffer = OpaqueKEBuffer(data: password)
-        let responseBuffer = OpaqueKEBuffer(data: registrationResponse)
-
-        let returnCode = clientRegistrationHandle.withRawHandle { regHandle in
-            passwordBuffer.withRawHandle { passwordHandle in
-                responseBuffer.withRawHandle { responseHandle in
-                    opaque_ke_client_registration_finish(regHandle, passwordHandle, responseHandle,
-                                                         &outUploadHandle, &outExportKeyHandle)
-                }
-            }
-        }
-
-        guard returnCode == 0 else {
-            throw OpaqueClientError.registrationFinishFailure(code: returnCode)
-        }
-
-        guard let uploadBuffer = OpaqueKEBuffer(handle: outUploadHandle),
-              let exportBuffer = OpaqueKEBuffer(handle: outExportKeyHandle),
-              let uploadData = uploadBuffer.data,
-              let exportData = exportBuffer.data
-        else {
-            throw OpaqueClientError.missingRegistrationFinishOutputs
-        }
-
-        return (registrationUpload: uploadData, exportKey: exportData)
+        return try clientRegistrationFinish(password: password,
+                                            clientRegistration: clientRegistration,
+                                            registrationResponse: registrationResponse,
+                                            clientIdentifier: clientIdentifier,
+                                            serverIdentifier: serverIdentifier)
     }
 }

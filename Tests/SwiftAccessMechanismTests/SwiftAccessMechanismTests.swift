@@ -10,7 +10,9 @@ struct SwiftAccessMechanismHighLevelTests {
         let (setupHandle, passwordFile, _) = try OpaqueExample.setUp(password: password)
 
         // Perform login flow using the stored setup handle and password file
-        let (clientSessionKey, serverSessionKey) = try OpaqueExample.doLogin(setupHandle: setupHandle, password: password, passwordFile: passwordFile)
+        let (clientSessionKey, serverSessionKey) = try OpaqueExample.doLogin(setupHandle: setupHandle,
+                                                                             password: password,
+                                                                             passwordFile: passwordFile)
 
         #expect(clientSessionKey == serverSessionKey)
     }
