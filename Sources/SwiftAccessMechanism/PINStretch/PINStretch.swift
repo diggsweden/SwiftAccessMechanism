@@ -10,20 +10,41 @@ import CryptoKit
 import OSLog
 
 
+/// Errors thrown by ``PINStretch/stretch(input:)`` and related operations.
 public enum PINStretchError: Error {
+    /// Input data could not be encoded.
     case invalidPasswordEncoding
+    /// Secure Enclave private key not available.
     case noEnclaveKey
+    /// Encrypted data format is invalid.
     case invalidEncryptedData
+    /// Decryption of stretched result failed.
     case decryptionFailed
+    /// Catch-all for unexpected failures.
     case generalError
 }
 
+/// Stretches a weak PIN/password into a 32-byte key using Secure Enclave ECDH + HKDF.
+///
+/// ## Example
+///
+/// ```swift
+/// let stretcher = PINStretch()
+/// let password = try stretcher.stretch(input: "1234".data(using: .utf8)!)
+/// // Use password with OPAQUE registration/authentication
+/// ```
 public struct PINStretch {
 
-    private var enclave: MySecureEnclave
+    fileprivate var enclave: AMSecureEnclave
 
+    /// Creates a new PINStretch instance, loading or generating a Secure Enclave key.
     public init() {
-        self.enclave = MySecureEnclave()
+        self.enclave = AMSecureEnclave()
+    }
+
+    /// Returns the Secure Enclave private key reference, or nil if unavailable.
+    public var privateKeyRef: SecKey? {
+        return enclave.privateKeyRef
     }
 
     /// Perform input stretching on raw input data and return a 32-byte derived key.
@@ -35,7 +56,7 @@ public struct PINStretch {
     /// 1. Maps the supplied `input` to an EC point on P-256 using `hashToCurveP256Sha256(...)`.
     ///    That function first performs a SHA-256 hashing internally.
     /// 2. Constructs an ephemeral P-256 private key from the h2c result and performs ECDH
-    ///    with a private key stored in the Secure Enclave (via `MySecureEnclave.privateKeyRef`).
+    ///    with a private key stored in the Secure Enclave (via `AMSecureEnclave.privateKeyRef`).
     /// 3. The raw ECDH result is passed through HKDF(SHA-256) with explicit salt and info to
     ///    produce a uniformly-distributed 32-byte output which is returned.
     ///

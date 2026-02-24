@@ -14,7 +14,7 @@ public enum OpaqueExampleError: Error {
 
 public struct OpaqueExample {
 
-    /// Set up a demo registration flow and return the server setup handle and password file needed for later login.
+    /// Set up a demo registration flow and return the server setup handle and password file needed for later authentication.
     /// - Parameter password: The password as data bytes.
     /// - Returns: A tuple containing the server setup handle, password file, and optional client export key.
     /// - Throws: An `OpaqueExampleError` if the operation fails.
@@ -39,32 +39,31 @@ public struct OpaqueExample {
         // Server: finish registration using upload data -> create password file
         let passwordFile = try OpaqueServer.registrationFinish(registrationUpload: clientRegistrationFinishResult.registrationUpload)
 
-        // Return setup handle (needed for login), password file (server stores this), and export key (client can use for additional cryptographic operations)
+        // Return setup handle (needed for authentication), password file (server stores this), and export key (client can use for additional cryptographic operations)
         return (serverSetupHandle: serverSetup, passwordFile: passwordFile, clientExportKey: clientRegistrationFinishResult.exportKey)
     }
 
-    /// doLogin runs a full client+server login flow using the previously returned setup handle and password file.
+    /// doAuthenticate runs a full client+server authentication flow using the previously returned setup handle and password file.
     /// - Parameters:
     ///   - setupHandle: The `ServerSetupHandle` returned from `setUp()`.
     ///   - password: The user's password as data bytes.
     ///   - passwordFile: The server's password file produced by registration.
     /// - Returns: A tuple containing the client's session key and the server's session key.
     /// - Throws: An `OpaqueClientError` or `OpaqueServerError` if any operation fails.
-    static public func doLogin(setupHandle: Data, password: Data, passwordFile: Data) throws -> (clientSessionKey: Data, serverSessionKey: Data) {
+    static public func doAuthenticate(setupHandle: Data, password: Data, passwordFile: Data) throws -> (clientSessionKey: Data, serverSessionKey: Data) {
         let context = Data()
         let clientIdentifier = Data()
         let serverIdentifier = Data()
         let serverSideClientId = Data()
 
-        // Step 1: Client starts login -> generate credential request and client login handle
-        //let (credReq, clientLoginHandle) = try OpaqueClient.loginStart(password: password)
-        let clientStart = try OpaqueClient.loginStart(password: password)
+        // Step 1: Client starts authentication -> generate credential request
+        let clientStart = try OpaqueClient.authenticateStart(password: password)
 
         // the client request is transmitted to the server
         let clientRequest = clientStart.credentialRequest
 
-        // Step 2: Server processes credential request -> produce credential response and server login data
-        let serverData = try OpaqueServer.loginStart(serverSetup: setupHandle,
+        // Step 2: Server processes credential request -> produce credential response and server authentication data
+        let serverData = try OpaqueServer.authenticateStart(serverSetup: setupHandle,
                                                      clientId: serverSideClientId,
                                                      clientRequest: clientRequest,
                                                      passwordFile: passwordFile,
@@ -75,8 +74,8 @@ public struct OpaqueExample {
         // the credential response is transmitted back to the server
         let credentialResponse = serverData.credentialResponse
 
-        // Step 3: Client finishes login using credential response -> obtain finalisation data and session key
-        let clientFinish = try OpaqueClient.loginFinish(clientRegistration: clientStart.clientRegistration,
+        // Step 3: Client finishes authentication using credential response -> obtain finalisation data and session key
+        let clientFinish = try OpaqueClient.authenticateFinish(clientRegistration: clientStart.clientRegistration,
                                                         password: password,
                                                         credentialResponse: credentialResponse,
                                                         context: context,
@@ -86,8 +85,8 @@ public struct OpaqueExample {
         // the client's credential finalisation data is transmitted to the server
         let credentialFinalization = clientFinish.credentialFinalization
 
-        // Step 4: Server finishes login using client finalisation -> obtain server session key
-        let sessionKey = try OpaqueServer.loginFinish(serverLogin: serverData.serverLogin,
+        // Step 4: Server finishes authentication using client finalisation -> obtain server session key
+        let sessionKey = try OpaqueServer.authenticateFinish(serverLogin: serverData.serverLogin,
                                                       clientFinalization: credentialFinalization,
                                                       context: context,
                                                       clientIdentifier: clientIdentifier,

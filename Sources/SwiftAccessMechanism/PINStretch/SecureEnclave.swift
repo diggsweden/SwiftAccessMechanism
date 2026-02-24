@@ -8,17 +8,33 @@
 import Foundation
 import OSLog
 
-public final class MySecureEnclave: ObservableObject {
+/// Manages a P-256 private key in the device's Secure Enclave for PIN stretching.
+///
+/// On init, attempts to load an existing key from the Keychain. If none exists, generates a new one.
+/// Used by ``PINStretch`` for ECDH key agreement.
+public final class AMSecureEnclave: ObservableObject {
+    /// X9.63 representation of the public key, or `nil` if key not loaded.
     fileprivate(set) var publicKey: Data?
 
+    /// Errors from Secure Enclave key operations.
     public enum Errors: Error {
-        case keyFetchError, keyDeleteError, internalError
+        /// Failed to load key from Keychain.
+        case keyFetchError
+        /// Failed to delete key from Keychain.
+        case keyDeleteError
+        /// Internal error (e.g. could not extract public key).
+        case internalError
+        /// Keychain item type mismatch.
+        case invalidKeychainItem
+        /// Failed to create access control or generate key.
+        case keyGenerationFailed
     }
 
     fileprivate let applicationTag = "se.digg.wallet.app.keys.Test.PINStretch"
-    //fileprivate(set) var privateKeyRef: SecKey?
+    /// Reference to the Secure Enclave private key, or `nil` if unavailable.
     public var privateKeyRef: SecKey?
 
+    /// Loads existing Secure Enclave key, or generates a new one if none found.
     public init() {
         do {
             try self.loadKey()
@@ -43,7 +59,12 @@ public final class MySecureEnclave: ObservableObject {
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         guard status == errSecSuccess else { throw Errors.keyFetchError }
-        let _privateKeyRef = item as! SecKey
+        guard let key = item, CFGetTypeID(key) == SecKeyGetTypeID() else {
+            Logger.sec.error("\(#function) Keychain item is not a SecKey")
+            throw Errors.invalidKeychainItem
+        }
+        // Force cast is safe: CFGetTypeID verified this is a SecKey
+        let _privateKeyRef = (key as! SecKey)
         guard let _publicKeyRef = SecKeyCopyPublicKey(_privateKeyRef) else {
             Logger.sec.debug("\(#function) Failed copying public key from key reference")
             throw Errors.internalError
@@ -51,7 +72,11 @@ public final class MySecureEnclave: ObservableObject {
 
         var error: Unmanaged<CFError>?
         guard let publicKey = SecKeyCopyExternalRepresentation(_publicKeyRef, &error) as? Data else {
-            throw error!.takeRetainedValue() as Error
+            if let error = error {
+                let cfError = error.takeRetainedValue() as Error
+                throw cfError
+            }
+            throw Errors.internalError
         }
 
         Logger.sec.debug("\(#function) Loaded Secure Enclave key \(self.applicationTag): \(publicKey.hexString())")
@@ -60,6 +85,7 @@ public final class MySecureEnclave: ObservableObject {
         self.publicKey = publicKey
     }
 
+    /// Generates a new P-256 key in the Secure Enclave and loads it.
     public func generateKey() throws {
         if self.privateKeyRef != nil {
             Logger.sec.error("\(#function) Key already present: \(self.applicationTag)")
@@ -69,16 +95,18 @@ public final class MySecureEnclave: ObservableObject {
 
         var error: Unmanaged<CFError>?
 
-        let access = SecAccessControlCreateWithFlags(
+        guard let access = SecAccessControlCreateWithFlags(
             kCFAllocatorDefault,
             kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
             [.privateKeyUsage],
             //[.privateKeyUsage, .biometryAny],
-            &error)
-
-        if error != nil {
-            Logger.sec.error("\(#function) FAILED generating access control \(error?.takeRetainedValue())")
-            throw error!.takeRetainedValue() as Error
+            &error) else {
+            if let error = error {
+                let cfError = error.takeRetainedValue() as Error
+                Logger.sec.error("\(#function) FAILED generating access control \(cfError)")
+                throw cfError
+            }
+            throw Errors.keyGenerationFailed
         }
 
         let attributes: NSDictionary = [
@@ -88,13 +116,17 @@ public final class MySecureEnclave: ObservableObject {
             kSecPrivateKeyAttrs: [
                 kSecAttrIsPermanent: true,
                 kSecAttrApplicationTag: applicationTag,
-                kSecAttrAccessControl: access!
+                kSecAttrAccessControl: access
             ]
         ]
 
         guard SecKeyCreateRandomKey(attributes, &error) != nil else {
-            Logger.sec.error("\(#function) FAILED generating key \(error?.takeRetainedValue())")
-            throw error!.takeRetainedValue() as Error
+            if let error = error {
+                let cfError = error.takeRetainedValue() as Error
+                Logger.sec.error("\(#function) FAILED generating key \(cfError)")
+                throw cfError
+            }
+            throw Errors.keyGenerationFailed
         }
 
         do {
@@ -104,6 +136,7 @@ public final class MySecureEnclave: ObservableObject {
         }
     }
 
+    /// Deletes the Secure Enclave key from the Keychain.
     public func deleteKey() async throws {
         Logger.sec.debug("\(#function) Deleting Secure Enclave key \(self.applicationTag)")
 

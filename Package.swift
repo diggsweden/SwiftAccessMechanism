@@ -5,7 +5,7 @@ import PackageDescription
 
 let package = Package(
     name: "SwiftAccessMechanism",
-    platforms: [.macOS(.v13), .iOS(.v16)],
+    platforms: [.macOS(.v14), .iOS(.v16)],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(
@@ -15,14 +15,14 @@ let package = Package(
     ],
     dependencies: [
         // Dependencies declare other packages that this package depends on.
+        .package(url: "https://github.com/airsidemobile/JOSESwift.git", .upToNextMajor(from: "3.0.0")),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
         // Targets can depend on other targets in this package and products from dependencies.
         .target(
             name: "SwiftAccessMechanism",
-            dependencies: [
-                           .target(name: "OpaqueKE_UniFFI")]
+            dependencies: [.target(name: "OpaqueKE_UniFFI"), "JOSESwift"]
         ),
         .binaryTarget(name: "OpaqueKE_UniFFI", path: "external/OpaqueKEUniffi.xcframework"),
         .testTarget(

@@ -13,9 +13,9 @@ public enum OpaqueServerError: Error {
     case missingRegistrationResponseHandle
     case serverRegistrationFinishFailure(code: Int32)
     case missingPasswordFileHandle
-    case serverLoginStartFailure(code: Int32)
+    case serverAuthenticateStartFailure(code: Int32)
     case missingOutputBuffers
-    case serverLoginFinishFailure(code: Int32)
+    case serverAuthenticateFinishFailure(code: Int32)
     case missingSessionKeyOutput
 }
 
@@ -48,16 +48,16 @@ public struct OpaqueServer {
 
     /// Wrapper for `opaque_ke_server_login_start`
     ///
-    /// Initiates the server-side login process by processing the client's login request.
-    /// This is the first step in the OPAQUE login flow from the server's perspective.
+    /// Initiates the server-side authentication by processing the client's request.
+    /// This is the first step in the OPAQUE authentication flow from the server's perspective.
     ///
     /// - Parameters:
     ///   - serverSetupHandle: The server setup handle containing the server's configuration and keys.
-    ///   - clientRequest: The client's login request data (KE1 message).
-    ///   - passwordFile: Optional password file data from a previous registration. If `nil`, the server will attempt login without a stored password file.
-    /// - Returns: A tuple containing the credential response data to send back to the client and the server login state data for use in `loginFinish()`.
+    ///   - clientRequest: The client's authentication request data (KE1 message).
+    ///   - passwordFile: Optional password file data from a previous registration. If `nil`, the server will attempt authentication without a stored password file.
+    /// - Returns: A tuple containing the credential response data to send back to the client and the server state data for use in `authenticateFinish()`.
     /// - Throws: An `OpaqueServerError` if the operation fails.
-    static public func loginStart(
+    static public func authenticateStart(
         serverSetup: Data,
         clientId: Data,
         clientRequest: Data,
@@ -77,11 +77,11 @@ public struct OpaqueServer {
     /// Wrapper for `opaque_ke_server_login_finish`.
     ///
     /// - Parameters:
-    ///   - serverLogin: The serverLogin blob previously returned by `serverLoginStart`.
+    ///   - serverLogin: The serverLogin blob previously returned by `authenticateStart`.
     ///   - clientFinalization: The client's finalisation bytes produced by the client (KE3/Finalisation).
     /// - Returns: A tuple with the server's session key as `Data` on success.
     /// - Throws: An `OpaqueServerError` when the underlying call returns a non-zero code or outputs are missing.
-    static public func loginFinish(serverLogin: Data, clientFinalization: Data,
+    static public func authenticateFinish(serverLogin: Data, clientFinalization: Data,
                                    context: Data, clientIdentifier: Data, serverIdentifier: Data) throws -> Data {
 
         return try serverLoginFinish(serverLogin: serverLogin,

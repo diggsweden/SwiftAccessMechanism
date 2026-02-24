@@ -1,0 +1,55 @@
+//
+//  BFFModels.swift
+//  SwiftAccessMechanism
+//
+//  Created by Fredrik Thulin on 2025-12-03.
+//
+import Foundation
+
+
+// MARK: - API Request Structure
+struct BFFRequest: Codable {
+    // Client identifier
+    let clientId: String
+    // Compact JWS string containing the signed OuterRequest
+    let outerRequestJws: String
+}
+
+// MARK: - new_state endpoint
+
+/// Request body for `POST /r2ps-api/new_state`.
+struct NewStateRequest: Codable {
+    let publicKey: JwkKey
+    let clientId: String?
+    let overwrite: Bool
+    let ttl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case publicKey
+        case clientId = "client_id"
+        case overwrite, ttl
+    }
+}
+
+/// Response body from `POST /r2ps-api/new_state`.
+public struct NewStateResponse: Codable {
+    public let status: InnerResponse.Status
+    /// Server-assigned (or echoed) client identifier.
+    public let clientId: String?
+    public let devAuthorizationCode: String?
+}
+
+// MARK: - Client Identity
+
+/// Persisted client identity — store across app launches (e.g. UserDefaults via JSONEncoder).
+///
+/// Created by ``BFFHttpClient/createClient(baseUrl:serverParameters:ttl:)``.
+/// Restored via ``BFFHttpClient/loadClient(baseUrl:identity:serverParameters:)``.
+public struct ClientIdentity: Codable {
+    /// Server-assigned client UUID.
+    public let clientId: String
+    /// Keychain `applicationTag` for the device's SE private key.
+    public let keyTag: String
+    /// DEV-ONLY authorization code; required when registering a PIN.
+    public let devAuthorizationCode: String?
+}

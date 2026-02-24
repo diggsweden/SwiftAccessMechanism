@@ -8,7 +8,7 @@
 import Foundation
 import OSLog
 
-// Error types for the Opaque client
+/// OPAQUE client errors.
 public enum OpaqueClientError: Error {
     case clientStartFailure(code: Int32)
     case missingClientStartOutputs
@@ -20,27 +20,34 @@ public enum OpaqueClientError: Error {
     case missingRegistrationFinishOutputs
 }
 
+/// OPAQUE PAKE client (Rust FFI wrapper).
+///
+/// Minimal Swift wrapper for Rust OPAQUE implementation (`OpaqueKeUniffi.xcframework`).
+/// See [IRTF CFRG OPAQUE](https://datatracker.ietf.org/doc/draft-irtf-cfrg-opaque/) for protocol details.
+///
+/// **Note:** Most code should use ``ProtocolRequest`` helpers instead of calling ``OpaqueClient`` directly.
 public struct OpaqueClient {
 
-    /// Starts the client login process by generating a credential request.
-    /// - Parameter password: The password as a string.
-    /// - Returns: A tuple containing the credential request data and a client login handle for the next step.
-    /// - Throws: An `OpaqueClientError` if the operation fails.
-    static public func loginStart(password: Data) throws -> ClientLoginStartResult {
+    /// Starts OPAQUE authentication.
+    ///
+    /// - Parameter password: Stretched PIN from ``PINStretch/stretchPin(_:)``.
+    /// - Returns: Client start result with credential request and state.
+    /// - Throws: ``OpaqueClientError`` if operation fails.
+    static public func authenticateStart(password: Data) throws -> ClientLoginStartResult {
 
         return try clientLoginStart(password: password)
 
     }
 
-    /// Completes the client login process using the server's credential response.
+    /// Completes the client authentication process using the server's credential response.
     /// - Parameters:
-    ///   - clientLoginHandle: The client login handle from `clientStart`.
+    ///   - clientRegistration: The client state from `authenticateStart`.
     ///   - password: The password as data bytes.
     ///   - credentialResponse: The server's credential response data.
     /// - Returns: A tuple containing the credential finalisation data and the session key.
     /// - Throws: An `OpaqueClientError` if the operation fails.
-    static public func loginFinish(clientRegistration: Data, password: Data, credentialResponse: Data,
-                                   context: Data, clientIdentifier: Data, serverIdentifier: Data) throws -> ClientLoginFinishResult {
+    static public func authenticateFinish(clientRegistration: Data, password: Data, credentialResponse: Data,
+                                          context: Data, clientIdentifier: Data, serverIdentifier: Data) throws -> ClientLoginFinishResult {
 
         return try clientLoginFinish(credentialResponse: credentialResponse,
                                      clientRegistration: clientRegistration,
