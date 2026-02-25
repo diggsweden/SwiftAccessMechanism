@@ -71,12 +71,10 @@ public struct OuterResponse {
 
         self.version = dto.version
         self.sessionId = dto.sessionId
-        let jwe = try JWE(compactSerialization: dto.innerJwe)
 
         let decryptedData: Data
         do {
-            let decrypted = try jwe.decrypt(using: session.decrypter)
-            decryptedData = decrypted.data()
+            decryptedData = try session.decryptInnerJwe(dto.innerJwe)
         } catch {
             Logger.api.error("Failed decrypting inner JWE: \(error)")
             Logger.api.debug("Tried decrypting using mode '\(session.mode.rawValue)'")

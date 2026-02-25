@@ -7,6 +7,7 @@
 
 import Foundation
 import JOSESwift
+import OSLog
 
 /// Encryption mode for Protocol layer.
 enum EncryptionType: String, Codable {
@@ -18,7 +19,9 @@ enum EncryptionType: String, Codable {
 
 struct ProtocolEncryption {
     fileprivate let encrypter: Encrypter
-    fileprivate let decrypter: Decrypter
+    // nil in device mode when clientPrivateKey is a Secure Enclave key (ECPrivateKey
+    // construction fails for SE keys). See SECKeyECDHDecryption.swift for fallback.
+    fileprivate let decrypter: Decrypter?
     fileprivate let header: JWEHeader
 }
 
@@ -71,12 +74,24 @@ struct ProtocolSession {
         return self.encryption.encrypter
     }
 
-    var decrypter: Decrypter {
-        return self.encryption.decrypter
-    }
-
     var header: JWEHeader {
         return self.encryption.header
+    }
+
+    /// Decrypts a compact JWE using the current mode.
+    ///
+    /// Uses the stored JOSESwift `Decrypter` when available (regular keys, session mode).
+    /// Falls back to ``decryptDeviceJWE(_:compactJWE:)`` for Secure Enclave device keys
+    /// where `ECPrivateKey` construction failed at init — see SECKeyECDHDecryption.swift.
+    func decryptInnerJwe(_ compactJWE: String) throws -> Data {
+        let jwe = try JWE(compactSerialization: compactJWE)
+        if let decrypter = encryption.decrypter {
+            return try jwe.decrypt(using: decrypter).data()
+        }
+        // SE key: decrypter is nil because ECPrivateKey(privateKey:) failed at init.
+        // TODO: Remove once JOSESwift supports SE keys natively (PR #460 or equivalent).
+        Logger.sec.warning("Using SE fallback decryption — fix upstream JOSESwift SE support")
+        return try decryptDeviceJWE(privateKey: clientPrivateKey, compactJWE: compactJWE)
     }
 
     /// Initializes session in device mode with ECDH-ES encryption.
@@ -116,10 +131,14 @@ struct ProtocolSession {
             throw Errors.serverKeyParseError
         }
 
-        let josePrivateKey = try ECPrivateKey(privateKey: clientPrivateKey)
-        guard let decrypter = Decrypter(keyManagementAlgorithm: .ECDH_ES, contentEncryptionAlgorithm: .A256GCM, decryptionKey: josePrivateKey) else {
-            throw Errors.clientKeyParseError
-        }
+        // Try to build a JOSESwift decrypter from the client private key. This succeeds
+        // for regular keys; fails silently (nil) for Secure Enclave keys because
+        // ECPrivateKey(privateKey:) calls SecKeyCopyExternalRepresentation which SE blocks.
+        // Outer.swift falls back to decryptDeviceJWE() (SECKeyECDHDecryption.swift) when nil.
+        let decrypter = (try? ECPrivateKey(privateKey: clientPrivateKey))
+            .flatMap { Decrypter(keyManagementAlgorithm: .ECDH_ES,
+                                 contentEncryptionAlgorithm: .A256GCM,
+                                 decryptionKey: $0) }
 
         var header = JWEHeader(keyManagementAlgorithm: .ECDH_ES, contentEncryptionAlgorithm: .A256GCM)
         header.kid = "device"
