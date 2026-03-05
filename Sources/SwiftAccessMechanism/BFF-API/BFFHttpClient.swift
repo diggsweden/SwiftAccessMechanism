@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+//
+// SPDX-License-Identifier: EUPL-1.2
+
 // BFFHttpClient.swift
 // Provisional HTTP client for early development.
 // Wraps BFFLayer with HTTP transport to POST signed+encrypted messages to the HSM worker backend.

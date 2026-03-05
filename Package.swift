@@ -1,3 +1,7 @@
+// SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
+//
+// SPDX-License-Identifier: EUPL-1.2
+
 // swift-tools-version: 6.2
 // The swift-tools-version declares the minimum version of Swift required to build this package.
 

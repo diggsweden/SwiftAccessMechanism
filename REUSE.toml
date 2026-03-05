@@ -1,0 +1,19 @@
+version = 1
+
+# Auto-generated UniFFI bindings — do not edit directly.
+# Source: https://github.com/diggsweden/opaque_ke_uniffi/
+[[annotations]]
+path = ["Sources/SwiftAccessMechanism/Opaque/opaque_ke_uniffi.swift"]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Digg - Agency for Digital Government"
+SPDX-License-Identifier = "EUPL-1.2"
+
+[[annotations]]
+path = [
+  "**/*.md",
+  "REUSE.toml",
+  ".gitignore",
+]
+precedence = "aggregate"
+SPDX-FileCopyrightText = "2026 Digg - Agency for Digital Government"
+SPDX-License-Identifier = "CC0-1.0"
