@@ -100,7 +100,7 @@ public struct BFFLayer {
         let request: BFFRequest
         let clientRegistration: Data
         // stored values required for finish
-        let password: Data
+        let password: StretchedPIN
         let authorization: String?
     }
 
@@ -182,7 +182,7 @@ public struct BFFLayer {
 
     // Shortcuts for constructing PAKE requests using the OPAQUE client helpers
     func registrationStart(
-        password: Data,
+        password: StretchedPIN,
         with session: ProtocolSession
     ) throws -> PAKEStartResult {
         let start = try ProtocolRequest.registrationStart(password: password, authorization: self.devAuthorizationCode)
@@ -219,7 +219,7 @@ public struct BFFLayer {
     ) throws -> BFFRequest {
         let clientFinish = try OpaqueClient.registrationFinish(
             clientRegistration: start.clientRegistration,
-            password: start.password,
+            password: start.password.data,
             registrationResponse: credentialResponse,
             clientIdentifier: self.opaqueClientId,
             serverIdentifier: self.serverParameters.opaqueServerIdentifier
@@ -229,7 +229,7 @@ public struct BFFLayer {
 
         let finishPakeRequest = PakeRequest(
             authorization: start.authorization,
-            task: nil,
+            purpose: nil,
             sessionDuration: nil,
             requestData: regKE3
         )
@@ -248,8 +248,58 @@ public struct BFFLayer {
         return bffRequest
     }
 
+    func changePinStart(
+        newPassword: StretchedPIN,
+        with session: ProtocolSession
+    ) throws -> PAKEStartResult {
+        let start = try ProtocolRequest.changePinStart(newPassword: newPassword)
+
+        let bffRequest = try self.createRequest(
+            outerRequest: start.outerRequest,
+            session: session,
+            debugLog: self.logRequestResponse
+        )
+
+        return PAKEStartResult(request: bffRequest,
+                               clientRegistration: start.clientRegistration,
+                               password: newPassword,
+                               authorization: nil)
+    }
+
+    func changePinFinish(start: PAKEStartResult, responseData: Data, with session: ProtocolSession) throws -> BFFRequest {
+        let parsed = try BFFLayer.parseAndValidateResponse(from: responseData, with: session, debugLog: self.logRequestResponse)
+        let pake = try parsed.decodePayload(PakeResponse.self)
+        let credentialResponse = try pake.decodedResponseData()
+
+        let clientFinish = try OpaqueClient.registrationFinish(
+            clientRegistration: start.clientRegistration,
+            password: start.password.data,
+            registrationResponse: credentialResponse,
+            clientIdentifier: self.opaqueClientId,
+            serverIdentifier: self.serverParameters.opaqueServerIdentifier
+        )
+
+        let regKE3 = clientFinish.registrationUpload.base64EncodedString()
+
+        let finishPakeRequest = PakeRequest(
+            authorization: nil,
+            purpose: nil,
+            sessionDuration: nil,
+            requestData: regKE3
+        )
+
+        let innerRequest = try InnerRequest(type: .changePinFinish, jsonData: finishPakeRequest)
+        let outerRequest = OuterRequest(inner: innerRequest)
+
+        return try self.createRequest(
+            outerRequest: outerRequest,
+            session: session,
+            debugLog: self.logRequestResponse
+        )
+    }
+
     func authenticateStart(
-        password: Data,
+        password: StretchedPIN,
         with session: ProtocolSession
     ) throws -> PAKEStartResult {
         let start = try ProtocolRequest.authenticateStart(password: password)
@@ -263,7 +313,7 @@ public struct BFFLayer {
         return PAKEStartResult(request: bffRequest,
                                clientRegistration: start.clientRegistration,
                                password: password,
-                               authorization: start.authorization)
+                               authorization: nil)
     }
 
     // accept raw response Data and build the authenticate finish request + client finalization

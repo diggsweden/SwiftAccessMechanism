@@ -83,10 +83,10 @@ struct APIRequestTests {
     }
 
     // Centralized setup helper used by all tests
-    private static func setupClient() async throws -> (api: BFFHttpClient, password: Data) {
+    private static func setupClient() async throws -> (api: BFFHttpClient, password: StretchedPIN) {
         let baseUrl = "http://localhost:8088"
         let api = try await getTestClient(baseUrl: baseUrl)
-        let password = "test".data(using: .utf8)!
+        let password = StretchedPIN(data: "test".data(using: .utf8)!)
         return (api, password)
     }
 
@@ -128,7 +128,6 @@ struct APIRequestTests {
 
             // Display the finish response
             print("✅ Registration finish response: \(finishPakeResponse)")
-            print("  - task: \(finishPakeResponse.task ?? "nil")")
             print("  - responseData: \(finishPakeResponse.responseDataForDebug())")
 
             print("✅ Successfully completed OPAQUE registration flow")
@@ -314,9 +313,50 @@ struct APIRequestTests {
         }
     }
 
+    @Test func testChangePinAfterAuthentication() async throws {
+        var (api, password) = try await Self.setupClient()
+        let newPassword = StretchedPIN(data: "newpass".data(using: .utf8)!)
+
+        do {
+            // Register and authenticate with initial password
+            _ = try await api.registration(password: password)
+            print("✅ Registered initial PIN")
+
+            _ = try await api.authenticate(password: password)
+            print("✅ Authenticated with initial PIN")
+
+            // Change PIN
+            try await api.changePin(newPassword: newPassword)
+            print("✅ Changed PIN — session reset to device mode")
+
+            // Re-authenticate with new password
+            let authResult = try await api.authenticate(password: newPassword)
+            print("✅ Authenticated with new PIN")
+            #expect(authResult.response.outer.sessionId != nil)
+            #expect(authResult.sessionKey.count == 32)
+
+            // Verify session works by listing keys
+            let listResponse = try await api.listKeys()
+            #expect(listResponse.keyInfo.count >= 0)
+            print("✅ listKeys after PIN change returned \(listResponse.keyInfo.count) keys")
+
+        } catch let urlError as URLError {
+            switch urlError.code {
+            case .cannotConnectToHost, .cannotFindHost, .networkConnectionLost, .notConnectedToInternet, .timedOut:
+                print("⚠️ Connection error (expected if service is not running): \(urlError.localizedDescription)")
+                return
+            default:
+                Issue.record("Unexpected network error: \(urlError.localizedDescription)")
+            }
+        } catch {
+            print("⚠️ Network call failed (expected if service not running): \(error)")
+            Issue.record("Unexpected network error: \(error.localizedDescription)")
+        }
+    }
+
     @Test func testDynamicClientRegistrationWithPIN() async throws {
         let baseUrl = "http://localhost:8088"
-        let password = "testpin".data(using: .utf8)!
+        let password = StretchedPIN(data: "testpin".data(using: .utf8)!)
 
         do {
             // Step 1: Create new client (generates new P-256 key, calls new_state)

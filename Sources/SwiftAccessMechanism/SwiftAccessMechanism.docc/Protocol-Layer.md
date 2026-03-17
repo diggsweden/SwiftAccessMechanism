@@ -330,7 +330,7 @@ let valid = SecKeyVerifySignature(
 ```swift
 struct PakeRequest: Codable {
     let authorization: String?
-    let task: String?
+    let purpose: String?
     let sessionDuration: Int?
     let requestData: String  // CodingKey: "data" — base64-encoded OPAQUE message
 }
@@ -339,7 +339,6 @@ struct PakeRequest: Codable {
 **PakeResponse:**
 ```swift
 struct PakeResponse: Codable {
-    let task: String?
     let responseData: String?  // CodingKey: "data" — base64-encoded OPAQUE message
 
     func decodedResponseData() throws -> Data  // Decodes base64

@@ -144,7 +144,7 @@ public struct BFFHttpClient {
     /// - Returns: ``PakeResponse`` with registration result.
     /// - Throws: ``APIError`` if network fails or server rejects registration.
     public func registration(
-        password: Data
+        password: StretchedPIN
     ) async throws -> PakeResponse {
         // Step 1: Build signed request + client state (use stored identifiers)
         let start = try self.api.registrationStart(
@@ -179,7 +179,7 @@ public struct BFFHttpClient {
     /// - Throws: Any error raised while building, signing, sending, or parsing the protocol messages.
     /// - Returns: ``AuthenticationResult`` containing session key, export key, and server response.
     public mutating func authenticate(
-        password: Data
+        password: StretchedPIN
     ) async throws -> AuthenticationResult {
         // Step 1: Build start request + client state (use stored identifiers)
         let start = try self.api.authenticateStart(
@@ -208,6 +208,26 @@ public struct BFFHttpClient {
             exportKey: finish.exportKey,
             response: finishParsed
         )
+    }
+
+    /// Changes the PIN using OPAQUE registration flow (start + finish, two-phase protocol).
+    ///
+    /// Requires an active session (call after ``authenticate(password:)``).
+    /// The server destroys the session after a successful PIN change — the client
+    /// session is reset to device mode, requiring re-authentication before further requests.
+    ///
+    /// - Parameter newPassword: Stretched new PIN from ``PINStretch/stretchPin(_:)``.
+    /// - Throws: ``APIError`` if network fails, server rejects the request, or not in session mode.
+    public mutating func changePin(newPassword: StretchedPIN) async throws {
+        let start = try self.api.changePinStart(newPassword: newPassword, with: self.session)
+        let startResponseData = try await self.sendRequest(request: start.request)
+
+        let finishRequest = try self.api.changePinFinish(start: start, responseData: startResponseData, with: self.session)
+        let finishResponseData = try await self.sendRequest(request: finishRequest)
+
+        _ = try BFFLayer.parseAndValidateResponse(from: finishResponseData, with: self.session, debugLog: self.logRequestResponse)
+
+        try self.session.exitSession()
     }
 
     /// Requests HSM to generate new P-256 ECDSA key.
