@@ -15,14 +15,22 @@ import Foundation
 /// Provides static methods for all operations: OPAQUE registration/authentication and HSM operations.
 /// Returns ``OuterRequest`` ready to sign with ``OuterRequest/toJWS(signingKey:)``.
 struct ProtocolRequest {
-    /// Result from OPAQUE registration/authentication start operations.
+    /// Result from OPAQUE registration start.
     struct RegistrationStartResult {
         /// Outer request ready to sign and send to server.
         let outerRequest: OuterRequest
         /// OPAQUE client state (pass to finish method).
         let clientRegistration: Data
-        /// Authorization code (for registration flow, pass to finish method).
+        /// Authorization code (pass to finish method).
         let authorization: String?
+    }
+
+    /// Result from OPAQUE authentication or PIN-change start.
+    struct AuthenticateStartResult {
+        /// Outer request ready to sign and send to server.
+        let outerRequest: OuterRequest
+        /// OPAQUE client state (pass to finish method).
+        let clientRegistration: Data
     }
 
     /// Starts OPAQUE registration.
@@ -32,13 +40,13 @@ struct ProtocolRequest {
     ///   - authorization: Optional authorization code (dev-only).
     /// - Returns: ``RegistrationStartResult`` with outer request and client state.
     /// - Throws: ``OpaqueClientError`` if OPAQUE operation fails.
-    static func registrationStart(password: Data, authorization: String? = nil) throws -> RegistrationStartResult {
-        let clientStart = try OpaqueClient.registrationStart(password: password)
+    static func registrationStart(password: StretchedPIN, authorization: String? = nil) throws -> RegistrationStartResult {
+        let clientStart = try OpaqueClient.registrationStart(password: password.data)
         let regKE1 = clientStart.registrationRequest.base64EncodedString()
 
         let startPakeRequest = PakeRequest(
             authorization: authorization,
-            task: nil,
+            purpose: nil,
             sessionDuration: nil,
             requestData: regKE1
         )
@@ -54,25 +62,23 @@ struct ProtocolRequest {
     /// Starts OPAQUE authentication.
     ///
     /// - Parameter password: Stretched PIN from ``PINStretch/stretchPin(_:)`` (must match registration).
-    /// - Returns: ``RegistrationStartResult`` with outer request and client state.
+    /// - Returns: ``AuthenticateStartResult`` with outer request and client state.
     /// - Throws: ``OpaqueClientError`` if OPAQUE operation fails.
-    static func authenticateStart(password: Data) throws -> RegistrationStartResult {
-        let clientStart = try OpaqueClient.authenticateStart(password: password)
+    static func authenticateStart(password: StretchedPIN) throws -> AuthenticateStartResult {
+        let clientStart = try OpaqueClient.authenticateStart(password: password.data)
         let authKE1 = clientStart.credentialRequest.base64EncodedString()
 
         let startPakeRequest = PakeRequest(
             authorization: nil,
-            task: nil,
+            purpose: nil,
             sessionDuration: nil,
             requestData: authKE1
         )
 
         let innerRequest = try InnerRequest(type: .authenticateStart, jsonData: startPakeRequest)
-        let outerRequest = OuterRequest(
-            inner: innerRequest,
-        )
+        let outerRequest = OuterRequest(inner: innerRequest)
 
-        return RegistrationStartResult(outerRequest: outerRequest, clientRegistration: clientStart.clientRegistration, authorization: nil)
+        return AuthenticateStartResult(outerRequest: outerRequest, clientRegistration: clientStart.clientRegistration)
     }
 
     /// Finishes OPAQUE registration.
@@ -87,14 +93,14 @@ struct ProtocolRequest {
     /// - Throws: ``OpaqueClientError`` if OPAQUE operation fails.
     static func registrationFinish(
         start: RegistrationStartResult,
-        password: Data,
+        password: StretchedPIN,
         credentialResponse: Data,
         clientIdentifier: Data,
         serverIdentifier: Data
     ) throws -> OuterRequest {
         let clientFinish = try OpaqueClient.registrationFinish(
             clientRegistration: start.clientRegistration,
-            password: password,
+            password: password.data,
             registrationResponse: credentialResponse,
             clientIdentifier: clientIdentifier,
             serverIdentifier: serverIdentifier
@@ -104,7 +110,7 @@ struct ProtocolRequest {
 
         let finishPakeRequest = PakeRequest(
             authorization: start.authorization,
-            task: nil,
+            purpose: nil,
             sessionDuration: nil,
             requestData: regKE3
         )
@@ -141,7 +147,7 @@ struct ProtocolRequest {
     /// - Throws: ``OpaqueClientError`` if OPAQUE operation fails.
     static func authenticateFinish(
         clientRegistration: Data,
-        password: Data,
+        password: StretchedPIN,
         credentialResponse: Data,
         context: Data,
         clientIdentifier: Data,
@@ -150,7 +156,7 @@ struct ProtocolRequest {
     ) throws -> FinishResult {
         let clientFinish = try OpaqueClient.authenticateFinish(
             clientRegistration: clientRegistration,
-            password: password,
+            password: password.data,
             credentialResponse: credentialResponse,
             context: context,
             clientIdentifier: clientIdentifier,
@@ -161,7 +167,7 @@ struct ProtocolRequest {
 
         let finishPakeRequest = PakeRequest(
             authorization: nil,
-            task: nil,
+            purpose: nil,
             sessionDuration: nil,
             requestData: authKE3
         )
@@ -174,6 +180,70 @@ struct ProtocolRequest {
         )
 
         return FinishResult(outerRequest: outerRequest, sessionKey: clientFinish.sessionKey, exportKey: clientFinish.exportKey)
+    }
+
+    /// Starts OPAQUE PIN change (session required).
+    ///
+    /// Uses the OPAQUE registration flow with the new PIN. Both ``changePinStart(newPassword:)``
+    /// and ``changePinFinish(start:password:credentialResponse:clientIdentifier:serverIdentifier:)``
+    /// require an active session (call after ``authenticateFinish(clientRegistration:password:credentialResponse:context:clientIdentifier:serverIdentifier:sessionId:)``).
+    ///
+    /// - Parameter newPassword: Stretched new PIN from ``PINStretch/stretchPin(_:)``.
+    /// - Returns: ``RegistrationStartResult`` with outer request and client state.
+    /// - Throws: ``OpaqueClientError`` if OPAQUE operation fails.
+    static func changePinStart(newPassword: StretchedPIN) throws -> RegistrationStartResult {
+        let clientStart = try OpaqueClient.registrationStart(password: newPassword.data)
+        let regKE1 = clientStart.registrationRequest.base64EncodedString()
+
+        let startPakeRequest = PakeRequest(
+            authorization: nil,
+            purpose: nil,
+            sessionDuration: nil,
+            requestData: regKE1
+        )
+
+        let innerRequest = try InnerRequest(type: .changePinStart, jsonData: startPakeRequest)
+        let outerRequest = OuterRequest(inner: innerRequest)
+
+        return RegistrationStartResult(outerRequest: outerRequest, clientRegistration: clientStart.clientRegistration, authorization: nil)
+    }
+
+    /// Finishes OPAQUE PIN change (session required).
+    ///
+    /// - Parameters:
+    ///   - start: Result from ``changePinStart(newPassword:)``.
+    ///   - password: Same new PIN used in ``changePinStart(newPassword:)``.
+    ///   - credentialResponse: Server's response from ``PakeResponse/responseData``.
+    ///   - clientIdentifier: Client identifier (same as used in original registration).
+    ///   - serverIdentifier: Server identifier (from ``ServerParameters/opaqueServerIdentifier``).
+    /// - Returns: ``OuterRequest`` ready to sign and send. Server destroys session after this.
+    /// - Throws: ``OpaqueClientError`` if OPAQUE operation fails.
+    static func changePinFinish(
+        start: RegistrationStartResult,
+        password: StretchedPIN,
+        credentialResponse: Data,
+        clientIdentifier: Data,
+        serverIdentifier: Data
+    ) throws -> OuterRequest {
+        let clientFinish = try OpaqueClient.registrationFinish(
+            clientRegistration: start.clientRegistration,
+            password: password.data,
+            registrationResponse: credentialResponse,
+            clientIdentifier: clientIdentifier,
+            serverIdentifier: serverIdentifier
+        )
+
+        let regKE3 = clientFinish.registrationUpload.base64EncodedString()
+
+        let finishPakeRequest = PakeRequest(
+            authorization: nil,
+            purpose: nil,
+            sessionDuration: nil,
+            requestData: regKE3
+        )
+
+        let innerRequest = try InnerRequest(type: .changePinFinish, jsonData: finishPakeRequest)
+        return OuterRequest(inner: innerRequest)
     }
 
     /// Requests HSM to generate new P-256 key.

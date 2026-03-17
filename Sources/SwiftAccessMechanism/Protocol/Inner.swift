@@ -17,8 +17,9 @@ import OSLog
 ///
 /// Maps to server-side operations. All operations available, though only subset commonly used:
 /// - OPAQUE: ``authenticateStart``, ``authenticateFinish``, ``registerStart``, ``registerFinish``
+/// - PIN change: ``changePinStart``, ``changePinFinish``
 /// - HSM: ``hsmGenerateKey``, ``hsmListKeys``, ``hsmSign``, ``hsmDeleteKey``, ``hsmEcdh``
-/// - Session: ``endSession``, ``pinChange``
+/// - Session: ``endSession``
 /// - Storage: ``store``, ``retrieve``
 /// - Logging: ``log``, ``getLog``
 /// - Info: ``info``
@@ -27,7 +28,8 @@ enum InnerRequestId: String, Codable {
     case authenticateFinish = "authenticate_finish"
     case registerStart = "register_start"
     case registerFinish = "register_finish"
-    case pinChange = "pin_change"
+    case changePinStart = "change_pin_start"
+    case changePinFinish = "change_pin_finish"
     case hsmSign = "hsm_sign"
     case hsmEcdh = "hsm_ecdh"
     case hsmGenerateKey = "hsm_generate_key"

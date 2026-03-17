@@ -14,6 +14,18 @@ import CryptoKit
 import OSLog
 
 
+/// A stretched PIN produced by ``PINStretch/stretch(input:)``.
+///
+/// Wraps the 32-byte output of the PIN-stretching operation. Callers cannot construct
+/// this type directly — it can only be obtained from ``PINStretch/stretch(input:)``,
+/// which ensures the raw PIN bytes are never passed directly to OPAQUE.
+public struct StretchedPIN: Equatable {
+    internal let data: Data
+
+    /// Number of bytes in the stretched key (always 32).
+    public var count: Int { data.count }
+}
+
 /// Errors thrown by ``PINStretch/stretch(input:)`` and related operations.
 public enum PINStretchError: Error {
     /// Input data could not be encoded.
@@ -77,7 +89,7 @@ public struct PINStretch {
     /// - Returns: A 32-byte derived key (Data) produced by HKDF(SHA-256) over the ECDH result.
     /// - Throws: One of `PINStretchError` on failure, or a system error if underlying crypto
     ///   operations (SecKey, CryptoKit) fail.
-    public func stretch(input: Data) throws -> Data {
+    public func stretch(input: Data) throws -> StretchedPIN {
         guard let sePrivateKeyRef = self.enclave.privateKeyRef else {
             throw PINStretchError.noEnclaveKey
         }
@@ -138,7 +150,7 @@ public struct PINStretch {
             throw PINStretchError.generalError
         }
 
-        return result
+        return StretchedPIN(data: result)
     }
 }
 

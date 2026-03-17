@@ -20,14 +20,14 @@ import JOSESwift
 /// Sent in ``InnerRequest`` data field for registration/authentication operations.
 struct PakeRequest: Codable {
     let authorization: String?
-    let task: String?
+    let purpose: String?
     let sessionDuration: Int?
 
     /// Base64-encoded OPAQUE message (KE1 or KE3).
     let requestData: String
 
     enum CodingKeys: String, CodingKey {
-        case authorization, task
+        case authorization, purpose
         case sessionDuration = "session_duration"
         case requestData = "data"
     }
@@ -52,13 +52,10 @@ struct PakeRequest: Codable {
 /// let credentialData = try pakeResp.decodedResponseData()
 /// ```
 public struct PakeResponse: Codable {
-    public let task: String?
-
     /// Base64-encoded OPAQUE message (KE2) or session ID.
     public let responseData: String?
 
     enum CodingKeys: String, CodingKey {
-        case task
         case responseData = "data"
     }
 

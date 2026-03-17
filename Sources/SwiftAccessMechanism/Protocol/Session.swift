@@ -58,6 +58,7 @@ struct ProtocolSession {
         case clientKeyParseError
         case invalidSessionKey
         case failedToCreateDirectDecrypter
+        case notInSessionMode
     }
 
     fileprivate let clientPrivateKey: SecKey
@@ -179,5 +180,20 @@ struct ProtocolSession {
         self.sessionId = sessionId
         self.encryption = ProtocolEncryption(encrypter: encrypter, decrypter: decrypter, header: header)
         self.mode = .session
+    }
+
+    /// Resets session from session mode back to device mode.
+    ///
+    /// Call after PIN change: the server destroys the session after ``ChangePinFinish``,
+    /// so the client must re-authenticate before making further requests.
+    ///
+    /// - Throws: ``Errors/notInSessionMode`` if not currently in session mode.
+    mutating func exitSession() throws {
+        guard mode == .session else {
+            throw Errors.notInSessionMode
+        }
+        self.sessionId = nil
+        self.encryption = try ProtocolSession.initDeviceEncryption(clientPrivateKey: clientPrivateKey, serverPublicKey: serverPublicKey)
+        self.mode = .device
     }
 }
