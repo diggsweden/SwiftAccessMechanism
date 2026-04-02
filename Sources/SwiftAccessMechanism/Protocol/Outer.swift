@@ -130,6 +130,7 @@ struct OuterRequest {
         let context: String
         let nonce: String
         let sessionId: String?
+        let serverKid: String
         let innerJwe: String
 
         enum CodingKeys: String, CodingKey {
@@ -137,6 +138,7 @@ struct OuterRequest {
             case context
             case nonce
             case sessionId = "session_id"
+            case serverKid = "server_kid"
             case innerJwe = "inner_jwe"
         }
     }
@@ -161,7 +163,7 @@ struct OuterRequest {
     func toJWS(signer: Signer, session: ProtocolSession) throws -> String {
         let sessionId = self.sessionId ?? session.sessionId
         let innerJwe = try inner.toJwe(session: session)
-        let dto = DTO(version: self.version, context: self.context, nonce: UUID().uuidString, sessionId: sessionId, innerJwe: innerJwe)
+        let dto = DTO(version: self.version, context: self.context, nonce: UUID().uuidString, sessionId: sessionId, serverKid: session.serverKid, innerJwe: innerJwe)
 
         let requestData = try JSONEncoder().encode(dto)
         let payload = Payload(requestData)

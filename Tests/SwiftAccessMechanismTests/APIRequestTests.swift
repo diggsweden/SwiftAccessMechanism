@@ -259,7 +259,7 @@ struct APIRequestTests {
             let tbsHash = Data(digest)
 
             // Ask HSM to sign — server should return raw ASN.1 ECDSA signature bytes
-            let signatureResponse = try await api.sign(hsmKeyId: key.kid, digest: tbsHash)
+            let signatureResponse = try await api.sign(hsmKeyId: key.kid!, digest: tbsHash)
 
             let signatureDER = try signatureResponse.toDER()
             let pub = try key.toSecKey()

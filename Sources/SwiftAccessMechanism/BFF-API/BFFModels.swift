@@ -36,6 +36,10 @@ public struct NewStateResponse: Codable {
     public let clientId: String?
     /// DEV-ONLY authorization code; required for PIN registration.
     public let devAuthorizationCode: String?
+    /// Server's current JWS public key; use for device-mode JWE encryption if present.
+    let serverJwsPublicKey: JwkKey?
+    /// OPAQUE server identifier returned by server; use in register/authenticate finish operations.
+    let opaqueServerId: String?
 }
 
 // MARK: - Client Identity

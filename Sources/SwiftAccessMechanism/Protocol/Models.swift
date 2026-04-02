@@ -105,7 +105,7 @@ public struct HsmKeyInfo: Codable {
     public let publicKey: JwkKey
 
     /// Key ID (alias for `publicKey.kid`).
-    public var kid: String {
+    public var kid: String? {
         publicKey.kid
     }
 
@@ -201,11 +201,20 @@ public struct JwkKey: Codable {
     /// Y coordinate (base64url-encoded).
     public let y: String
 
-    /// Key ID (server-assigned identifier).
-    public let kid: String
+    /// Key ID (server-assigned identifier, optional).
+    public let kid: String?
 
     enum CodingKeys: String, CodingKey {
         case kty, crv, x, y, kid
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(kty, forKey: .kty)
+        try c.encode(crv, forKey: .crv)
+        try c.encode(x, forKey: .x)
+        try c.encode(y, forKey: .y)
+        try c.encodeIfPresent(kid, forKey: .kid)
     }
 
     /// Converts JWK to `SecKey` for CryptoKit operations.

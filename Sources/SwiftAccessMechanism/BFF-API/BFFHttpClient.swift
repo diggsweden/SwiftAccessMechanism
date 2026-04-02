@@ -24,7 +24,9 @@ public struct BFFHttpClient {
     }
 
     fileprivate var identity: BFFIdentity
-    fileprivate let serverParameters: ServerParameters
+    /// Current server parameters — updated after `new_state` with server-derived key and OPAQUE ID.
+    /// Persist this alongside ``ClientIdentity`` and restore on next launch.
+    public fileprivate(set) var serverParameters: ServerParameters
     fileprivate var api: BFFLayer
     fileprivate let baseUrl: String
     fileprivate var session: ProtocolSession
@@ -46,7 +48,8 @@ public struct BFFHttpClient {
         guard let clientPrivateKey = identity.privateKey else {
             throw APIError.noPrivateKey
         }
-        let session = try ProtocolSession(clientPrivateKey: clientPrivateKey, serverPublicKey: serverParameters.serverPublicKey)
+        let serverKid = serverParameters.serverJwsPublicKey.kid ?? ""
+        let session = try ProtocolSession(clientPrivateKey: clientPrivateKey, serverPublicKey: serverParameters.serverPublicKey, serverKid: serverKid)
         let api = try BFFLayer(clientId: identity.clientId, serverParameters: serverParameters, opaqueClientId: identity.opaqueClientId(), devAuthorizationCode: identity.devAuthorizationCode)
         return (session, api)
     }
@@ -347,6 +350,19 @@ public struct BFFHttpClient {
 
         identity.clientId = clientId
         identity.devAuthorizationCode = devAuthCode
+
+        if let serverJwk = raw.serverJwsPublicKey,
+           let opaqueServerId = raw.opaqueServerId,
+           let privateKey = identity.privateKey {
+            let updatedParams = try ServerParameters(
+                serverJwsPublicKey: serverJwk,
+                opaqueContext: serverParameters.opaqueContext,
+                opaqueServerIdentifier: Data(opaqueServerId.utf8)
+            )
+            serverParameters = updatedParams
+            session = try ProtocolSession(clientPrivateKey: privateKey, serverPublicKey: updatedParams.serverPublicKey, serverKid: serverJwk.kid ?? "")
+        }
+
         api = try BFFLayer(clientId: clientId, serverParameters: serverParameters, opaqueClientId: try identity.opaqueClientId(), devAuthorizationCode: devAuthCode)
     }
 
