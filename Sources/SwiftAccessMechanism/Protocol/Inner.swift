@@ -109,6 +109,12 @@ extension InnerRequest {
     }
 }
 
+/// Server error returned in ``InnerResponse/errorMessage`` when status is ``InnerResponse/Status/error``.
+public struct ServerError: Error {
+    /// JSON string with `title`, `detail`, and `request_id` fields.
+    public let message: String
+}
+
 /// Server response inner layer (JWE encrypted, decrypted by ``OuterResponse``).
 ///
 /// Contains plaintext response data after decryption.
@@ -138,10 +144,14 @@ public struct InnerResponse: Codable {
     /// Response status (OK or ERROR).
     public let status: Status
 
+    /// Error details from server (JSON string with title/detail/request_id) when status is ``Status/error``.
+    public let errorMessage: String?
+
     enum CodingKeys: String, CodingKey {
         case version, data
         case expiresIn = "expires_in"
         case status
+        case errorMessage = "error_message"
     }
 
     /// Decodes response data to typed model.

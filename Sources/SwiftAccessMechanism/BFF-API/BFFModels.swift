@@ -19,27 +19,22 @@ struct BFFRequest: Codable {
     let outerRequestJws: String
 }
 
-// MARK: - new_state endpoint
+// MARK: - device-states endpoint
 
-/// Request body for `POST /r2ps-api/new_state`.
+/// Request body for `POST /hsm/v1/device-states`.
 struct NewStateRequest: Codable {
     let publicKey: JwkKey
     let clientId: String?
     let overwrite: Bool
     let ttl: String?
-
-    enum CodingKeys: String, CodingKey {
-        case publicKey
-        case clientId = "client_id"
-        case overwrite, ttl
-    }
 }
 
-/// Response body from `POST /r2ps-api/new_state`.
+/// Response body from `POST /hsm/v1/device-states`.
 public struct NewStateResponse: Codable {
-    public let status: InnerResponse.Status
+    public let status: String
     /// Server-assigned (or echoed) client identifier.
     public let clientId: String?
+    /// DEV-ONLY authorization code; required for PIN registration.
     public let devAuthorizationCode: String?
 }
 

@@ -73,6 +73,9 @@ public struct BFFLayer {
         /// - Returns: Decoded response object.
         /// - Throws: Decoding errors.
         public func decodePayload<T: Decodable>(_ type: T.Type) throws -> T {
+            if outer.innerResponse.status == .error {
+                throw ServerError(message: outer.innerResponse.errorMessage ?? "Unknown inner error")
+            }
             let payload = outer.innerResponse.data?.data(using: .utf8) ?? Data()
             do {
                 return try JSONDecoder().decode(type, from: payload)
@@ -148,6 +151,7 @@ public struct BFFLayer {
     // Accept raw response bytes directly and delegate to string-based parser
     static func parseAndValidateResponse(from responseData: Data, with session: ProtocolSession, debugLog: Bool) throws -> ParsedBFFResponse {
         guard let jwsString = String(data: responseData, encoding: .utf8) else {
+            Logger.api.error("Response is not valid UTF-8: \(responseData.hexString())")
             throw BFFLayer.APIError.networkError
         }
         return try BFFLayer.parseAndValidateResponse(from: jwsString, with: session, debugLog: debugLog)

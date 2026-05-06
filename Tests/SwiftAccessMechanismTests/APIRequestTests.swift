@@ -32,54 +32,26 @@ struct APIRequestTests {
 
     /// Create a test BFFHttpClient with an ephemeral key pair.
     ///
-    /// Generates a fresh P-256 key pair for each test run and registers with the server.
+    /// Generates a fresh ephemeral P-256 key and registers with the server (overwrite: true for clean slate).
     private static func getTestClient(baseUrl: String) async throws -> BFFHttpClient {
-        // Generate ephemeral test key (regular Keychain, not Secure Enclave for test speed)
         let keyTag = "test-\(UUID().uuidString)"
         let tagData = keyTag.data(using: .utf8)!
         var error: Unmanaged<CFError>?
-
         let attrs: NSDictionary = [
             kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeySizeInBits: 256,
-            kSecPrivateKeyAttrs: [
-                kSecAttrIsPermanent: false,
-                kSecAttrApplicationTag: tagData
-            ]
+            kSecPrivateKeyAttrs: [kSecAttrIsPermanent: false, kSecAttrApplicationTag: tagData]
         ]
-
         guard let privateKey = SecKeyCreateRandomKey(attrs, &error) else {
-            if let error = error {
-                throw error.takeRetainedValue() as Error
-            }
-            throw TestError.keyGenerationFailed("Failed to generate test key")
+            throw (error?.takeRetainedValue() as? Error) ?? TestError.keyGenerationFailed("key gen failed")
         }
-
-        guard let clientPublicKey = SecKeyCopyPublicKey(privateKey) else {
-            throw TestError.keyGenerationFailed("Failed to extract public key")
-        }
-
-        // Register with server
-        let newStateResponse = try await BFFHttpClient.registerNewDevice(
-            baseUrl: baseUrl,
-            publicKey: clientPublicKey,
-            overwrite: true,
-            ttl: nil
-        )
-
-        guard newStateResponse.status == .ok, let returnedClientId = newStateResponse.clientId else {
-            throw TestError.responseMissing
-        }
-
-        // Create identity with returned client ID
-        let identity = BFFIdentity(
-            clientId: returnedClientId,
+        return try await BFFHttpClient(
+            privateKey: privateKey,
             keyTag: keyTag,
-            devAuthorizationCode: newStateResponse.devAuthorizationCode,
-            privateKey: privateKey
+            serverParameters: testServerParameters,
+            baseUrl: baseUrl,
+            overwrite: true
         )
-
-        return try BFFHttpClient(identity: identity, serverParameters: testServerParameters, baseUrl: baseUrl)
     }
 
     // Centralized setup helper used by all tests
@@ -238,7 +210,7 @@ struct APIRequestTests {
             // Expect exactly one more key
             #expect(afterCount >= beforeCount + 1)
 
-            #expect(afterList.keyInfo[0].publicKey.kid == createdKey.public_key.kid)
+            #expect(afterList.keyInfo.contains { $0.kid == createdKey.public_key.kid })
 
         } catch let urlError as URLError {
             switch urlError.code {
@@ -271,9 +243,15 @@ struct APIRequestTests {
 
             #expect(bffResponse.outer.sessionId != nil)
 
-            // Create a new HSM key
-            let createdKey = try await api.createHsmKey()
-            let key = createdKey.public_key
+            // Use the initial key created during device state-init (listKeys, then sign).
+            // The backend allows only one HSM mutating op per session, so we must not
+            // call createHsmKey() before sign() in the same session.
+            let keyList = try await api.listKeys()
+            guard let keyInfo = keyList.keyInfo.first else {
+                Issue.record("No HSM keys available for signing")
+                return
+            }
+            let key = keyInfo.publicKey
 
             // Compute tbs_hash (SHA-256 of a test message)
             let message = "test message".data(using: .utf8)!
