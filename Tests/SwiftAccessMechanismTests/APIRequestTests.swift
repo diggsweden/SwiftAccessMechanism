@@ -32,61 +32,33 @@ struct APIRequestTests {
 
     /// Create a test BFFHttpClient with an ephemeral key pair.
     ///
-    /// Generates a fresh P-256 key pair for each test run and registers with the server.
+    /// Generates a fresh ephemeral P-256 key and registers with the server (overwrite: true for clean slate).
     private static func getTestClient(baseUrl: String) async throws -> BFFHttpClient {
-        // Generate ephemeral test key (regular Keychain, not Secure Enclave for test speed)
         let keyTag = "test-\(UUID().uuidString)"
         let tagData = keyTag.data(using: .utf8)!
         var error: Unmanaged<CFError>?
-
         let attrs: NSDictionary = [
             kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeySizeInBits: 256,
-            kSecPrivateKeyAttrs: [
-                kSecAttrIsPermanent: false,
-                kSecAttrApplicationTag: tagData
-            ]
+            kSecPrivateKeyAttrs: [kSecAttrIsPermanent: false, kSecAttrApplicationTag: tagData]
         ]
-
         guard let privateKey = SecKeyCreateRandomKey(attrs, &error) else {
-            if let error = error {
-                throw error.takeRetainedValue() as Error
-            }
-            throw TestError.keyGenerationFailed("Failed to generate test key")
+            throw (error?.takeRetainedValue() as? Error) ?? TestError.keyGenerationFailed("key gen failed")
         }
-
-        guard let clientPublicKey = SecKeyCopyPublicKey(privateKey) else {
-            throw TestError.keyGenerationFailed("Failed to extract public key")
-        }
-
-        // Register with server
-        let newStateResponse = try await BFFHttpClient.registerNewDevice(
-            baseUrl: baseUrl,
-            publicKey: clientPublicKey,
-            overwrite: true,
-            ttl: nil
-        )
-
-        guard newStateResponse.status == .ok, let returnedClientId = newStateResponse.clientId else {
-            throw TestError.responseMissing
-        }
-
-        // Create identity with returned client ID
-        let identity = BFFIdentity(
-            clientId: returnedClientId,
+        return try await BFFHttpClient(
+            privateKey: privateKey,
             keyTag: keyTag,
-            devAuthorizationCode: newStateResponse.devAuthorizationCode,
-            privateKey: privateKey
+            serverParameters: testServerParameters,
+            baseUrl: baseUrl,
+            overwrite: true
         )
-
-        return try BFFHttpClient(identity: identity, serverParameters: testServerParameters, baseUrl: baseUrl)
     }
 
     // Centralized setup helper used by all tests
-    private static func setupClient() async throws -> (api: BFFHttpClient, password: Data) {
+    private static func setupClient() async throws -> (api: BFFHttpClient, password: StretchedPIN) {
         let baseUrl = "http://localhost:8088"
         let api = try await getTestClient(baseUrl: baseUrl)
-        let password = "test".data(using: .utf8)!
+        let password = StretchedPIN(data: "test".data(using: .utf8)!)
         return (api, password)
     }
 
@@ -128,7 +100,6 @@ struct APIRequestTests {
 
             // Display the finish response
             print("✅ Registration finish response: \(finishPakeResponse)")
-            print("  - task: \(finishPakeResponse.task ?? "nil")")
             print("  - responseData: \(finishPakeResponse.responseDataForDebug())")
 
             print("✅ Successfully completed OPAQUE registration flow")
@@ -239,7 +210,7 @@ struct APIRequestTests {
             // Expect exactly one more key
             #expect(afterCount >= beforeCount + 1)
 
-            #expect(afterList.keyInfo[0].publicKey.kid == createdKey.public_key.kid)
+            #expect(afterList.keyInfo.contains { $0.kid == createdKey.public_key.kid })
 
         } catch let urlError as URLError {
             switch urlError.code {
@@ -272,9 +243,15 @@ struct APIRequestTests {
 
             #expect(bffResponse.outer.sessionId != nil)
 
-            // Create a new HSM key
-            let createdKey = try await api.createHsmKey()
-            let key = createdKey.public_key
+            // Use the initial key created during device state-init (listKeys, then sign).
+            // The backend allows only one HSM mutating op per session, so we must not
+            // call createHsmKey() before sign() in the same session.
+            let keyList = try await api.listKeys()
+            guard let keyInfo = keyList.keyInfo.first else {
+                Issue.record("No HSM keys available for signing")
+                return
+            }
+            let key = keyInfo.publicKey
 
             // Compute tbs_hash (SHA-256 of a test message)
             let message = "test message".data(using: .utf8)!
@@ -314,9 +291,50 @@ struct APIRequestTests {
         }
     }
 
+    @Test func testChangePinAfterAuthentication() async throws {
+        var (api, password) = try await Self.setupClient()
+        let newPassword = StretchedPIN(data: "newpass".data(using: .utf8)!)
+
+        do {
+            // Register and authenticate with initial password
+            _ = try await api.registration(password: password)
+            print("✅ Registered initial PIN")
+
+            _ = try await api.authenticate(password: password)
+            print("✅ Authenticated with initial PIN")
+
+            // Change PIN
+            try await api.changePin(newPassword: newPassword)
+            print("✅ Changed PIN — session reset to device mode")
+
+            // Re-authenticate with new password
+            let authResult = try await api.authenticate(password: newPassword)
+            print("✅ Authenticated with new PIN")
+            #expect(authResult.response.outer.sessionId != nil)
+            #expect(authResult.sessionKey.count == 32)
+
+            // Verify session works by listing keys
+            let listResponse = try await api.listKeys()
+            #expect(listResponse.keyInfo.count >= 0)
+            print("✅ listKeys after PIN change returned \(listResponse.keyInfo.count) keys")
+
+        } catch let urlError as URLError {
+            switch urlError.code {
+            case .cannotConnectToHost, .cannotFindHost, .networkConnectionLost, .notConnectedToInternet, .timedOut:
+                print("⚠️ Connection error (expected if service is not running): \(urlError.localizedDescription)")
+                return
+            default:
+                Issue.record("Unexpected network error: \(urlError.localizedDescription)")
+            }
+        } catch {
+            print("⚠️ Network call failed (expected if service not running): \(error)")
+            Issue.record("Unexpected network error: \(error.localizedDescription)")
+        }
+    }
+
     @Test func testDynamicClientRegistrationWithPIN() async throws {
         let baseUrl = "http://localhost:8088"
-        let password = "testpin".data(using: .utf8)!
+        let password = StretchedPIN(data: "testpin".data(using: .utf8)!)
 
         do {
             // Step 1: Create new client (generates new P-256 key, calls new_state)

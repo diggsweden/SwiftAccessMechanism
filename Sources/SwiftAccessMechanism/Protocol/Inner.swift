@@ -17,8 +17,9 @@ import OSLog
 ///
 /// Maps to server-side operations. All operations available, though only subset commonly used:
 /// - OPAQUE: ``authenticateStart``, ``authenticateFinish``, ``registerStart``, ``registerFinish``
+/// - PIN change: ``changePinStart``, ``changePinFinish``
 /// - HSM: ``hsmGenerateKey``, ``hsmListKeys``, ``hsmSign``, ``hsmDeleteKey``, ``hsmEcdh``
-/// - Session: ``endSession``, ``pinChange``
+/// - Session: ``endSession``
 /// - Storage: ``store``, ``retrieve``
 /// - Logging: ``log``, ``getLog``
 /// - Info: ``info``
@@ -27,7 +28,8 @@ enum InnerRequestId: String, Codable {
     case authenticateFinish = "authenticate_finish"
     case registerStart = "register_start"
     case registerFinish = "register_finish"
-    case pinChange = "pin_change"
+    case changePinStart = "change_pin_start"
+    case changePinFinish = "change_pin_finish"
     case hsmSign = "hsm_sign"
     case hsmEcdh = "hsm_ecdh"
     case hsmGenerateKey = "hsm_generate_key"
@@ -107,6 +109,12 @@ extension InnerRequest {
     }
 }
 
+/// Server error returned in ``InnerResponse/errorMessage`` when status is ``InnerResponse/Status/error``.
+public struct ServerError: Error {
+    /// JSON string with `title`, `detail`, and `request_id` fields.
+    public let message: String
+}
+
 /// Server response inner layer (JWE encrypted, decrypted by ``OuterResponse``).
 ///
 /// Contains plaintext response data after decryption.
@@ -136,10 +144,14 @@ public struct InnerResponse: Codable {
     /// Response status (OK or ERROR).
     public let status: Status
 
+    /// Error details from server (JSON string with title/detail/request_id) when status is ``Status/error``.
+    public let errorMessage: String?
+
     enum CodingKeys: String, CodingKey {
         case version, data
         case expiresIn = "expires_in"
         case status
+        case errorMessage = "error_message"
     }
 
     /// Decodes response data to typed model.

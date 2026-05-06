@@ -23,9 +23,9 @@ public struct BFFHttpClient {
         public let response: BFFLayer.ParsedBFFResponse
     }
 
-    fileprivate let identity: BFFIdentity
+    fileprivate var identity: BFFIdentity
     fileprivate let serverParameters: ServerParameters
-    fileprivate let api: BFFLayer
+    fileprivate var api: BFFLayer
     fileprivate let baseUrl: String
     fileprivate var session: ProtocolSession
 
@@ -39,21 +39,57 @@ public struct BFFHttpClient {
         case publicKeyExtractionFailed
     }
 
-    public init(identity: BFFIdentity, serverParameters: ServerParameters, baseUrl: String) throws {
+    // MARK: - Shared setup
+
+    /// Shared setup: creates ``ProtocolSession`` and ``BFFLayer`` from identity + server params.
+    private static func setUp(identity: BFFIdentity, serverParameters: ServerParameters) throws -> (ProtocolSession, BFFLayer) {
         guard let clientPrivateKey = identity.privateKey else {
             throw APIError.noPrivateKey
         }
+        let session = try ProtocolSession(clientPrivateKey: clientPrivateKey, serverPublicKey: serverParameters.serverPublicKey)
+        let api = try BFFLayer(clientId: identity.clientId, serverParameters: serverParameters, opaqueClientId: identity.opaqueClientId(), devAuthorizationCode: identity.devAuthorizationCode)
+        return (session, api)
+    }
+
+    // MARK: - Init
+
+    /// Loads an existing registered identity.
+    ///
+    /// Use ``init(privateKey:keyTag:serverParameters:baseUrl:overwrite:)`` to register a new device.
+    public init(identity: BFFIdentity, serverParameters: ServerParameters, baseUrl: String) throws {
+        let (session, api) = try Self.setUp(identity: identity, serverParameters: serverParameters)
         self.identity = identity
         self.serverParameters = serverParameters
         self.baseUrl = baseUrl
-        self.session = try ProtocolSession(clientPrivateKey: clientPrivateKey, serverPublicKey: serverParameters.serverPublicKey)
+        self.session = session
+        self.api = api
+    }
 
-        self.api = try BFFLayer(clientId: identity.clientId, serverParameters: serverParameters, opaqueClientId: identity.opaqueClientId(), devAuthorizationCode: identity.devAuthorizationCode)
+    /// Creates and registers a new device with the server.
+    ///
+    /// Generates or uses the provided private key, calls ``registerNewDevice(overwrite:ttl:)`` to
+    /// obtain a server-assigned `clientId` and `devAuthorizationCode`, then finishes setup.
+    ///
+    /// - Parameters:
+    ///   - privateKey: P-256 private key for this device.
+    ///   - keyTag: Keychain tag identifying the private key.
+    ///   - serverParameters: Server crypto parameters.
+    ///   - baseUrl: Base URL of the BFF service.
+    ///   - overwrite: Pass `true` to replace any existing server-side state for this key.
+    public init(privateKey: SecKey, keyTag: String, serverParameters: ServerParameters, baseUrl: String, overwrite: Bool = false) async throws {
+        let identity = BFFIdentity(privateKey: privateKey, keyTag: keyTag)
+        let (session, api) = try Self.setUp(identity: identity, serverParameters: serverParameters)
+        self.identity = identity
+        self.serverParameters = serverParameters
+        self.baseUrl = baseUrl
+        self.session = session
+        self.api = api
+        try await self.registerNewDevice(overwrite: overwrite)
     }
 
     /// Send a signed BFF request to the server and return the raw HTTP response body.
     ///
-    /// This method performs a POST to `baseUrl + "/r2ps-api/service"` with content-type
+    /// This method performs a POST to `baseUrl + "/hsm/v1/operations"` with content-type
     /// `application/json`. The `BFFRequest.outerRequestJws` (compact JWS string) is used as the
     /// HTTP body. The caller is responsible for parsing/verifying the returned bytes.
     ///
@@ -73,11 +109,11 @@ public struct BFFHttpClient {
 
     /// POST any JSON-encodable body to `baseUrl + path` and return raw response Data.
     ///
-    /// Shared by signed JWS requests (path `/r2ps-api/service`) and plain JSON endpoints
-    /// such as `new_state` (path `/r2ps-api/new_state`).
+    /// Shared by signed JWS requests (path `/hsm/v1/operations`) and plain JSON endpoints
+    /// such as device-states (path `/hsm/v1/device-states`).
     private static func sendRequest<Body: Encodable>(
         baseUrl: String,
-        path: String = "/r2ps-api/service",
+        path: String = "/hsm/v1/operations",
         body: Body
     ) async throws -> Data {
         guard let url = URL(string: baseUrl + path) else {
@@ -144,7 +180,7 @@ public struct BFFHttpClient {
     /// - Returns: ``PakeResponse`` with registration result.
     /// - Throws: ``APIError`` if network fails or server rejects registration.
     public func registration(
-        password: Data
+        password: StretchedPIN
     ) async throws -> PakeResponse {
         // Step 1: Build signed request + client state (use stored identifiers)
         let start = try self.api.registrationStart(
@@ -179,7 +215,7 @@ public struct BFFHttpClient {
     /// - Throws: Any error raised while building, signing, sending, or parsing the protocol messages.
     /// - Returns: ``AuthenticationResult`` containing session key, export key, and server response.
     public mutating func authenticate(
-        password: Data
+        password: StretchedPIN
     ) async throws -> AuthenticationResult {
         // Step 1: Build start request + client state (use stored identifiers)
         let start = try self.api.authenticateStart(
@@ -208,6 +244,26 @@ public struct BFFHttpClient {
             exportKey: finish.exportKey,
             response: finishParsed
         )
+    }
+
+    /// Changes the PIN using OPAQUE registration flow (start + finish, two-phase protocol).
+    ///
+    /// Requires an active session (call after ``authenticate(password:)``).
+    /// The server destroys the session after a successful PIN change — the client
+    /// session is reset to device mode, requiring re-authentication before further requests.
+    ///
+    /// - Parameter newPassword: Stretched new PIN from ``PINStretch/stretchPin(_:)``.
+    /// - Throws: ``APIError`` if network fails, server rejects the request, or not in session mode.
+    public mutating func changePin(newPassword: StretchedPIN) async throws {
+        let start = try self.api.changePinStart(newPassword: newPassword, with: self.session)
+        let startResponseData = try await self.sendRequest(request: start.request)
+
+        let finishRequest = try self.api.changePinFinish(start: start, responseData: startResponseData, with: self.session)
+        let finishResponseData = try await self.sendRequest(request: finishRequest)
+
+        _ = try BFFLayer.parseAndValidateResponse(from: finishResponseData, with: self.session, debugLog: self.logRequestResponse)
+
+        try self.session.exitSession()
     }
 
     /// Requests HSM to generate new P-256 ECDSA key.
@@ -250,36 +306,56 @@ public struct BFFHttpClient {
         return try await self.sendRequest(outerRequest: request, session: self.session, responseType: SignatureResponse.self)
     }
 
-    // MARK: - Factories
+    // MARK: - Device registration
 
-    /// Registers a new device with the server by calling `/r2ps-api/new_state`.
+    /// Registers (or re-registers) this device with the server via `/hsm/v1/device-states`.
+    ///
+    /// Updates ``BFFIdentity/clientId`` and ``BFFIdentity/devAuthorizationCode`` on the stored identity.
+    /// Called automatically by ``init(privateKey:keyTag:serverParameters:baseUrl:overwrite:)``.
     ///
     /// - Parameters:
-    ///   - baseUrl: Base URL of the BFF service.
-    ///   - publicKey: Device public key (P-256) to register.
-    ///   - overwrite: If true, replaces existing registration for this key.
+    ///   - overwrite: Pass `true` to replace any existing server-side state for this key.
     ///   - ttl: Optional session TTL hint.
-    /// - Returns: Server response with assigned client ID and optional dev authorization code.
     /// - Throws: Network or server errors.
-    public static func registerNewDevice(
-        baseUrl: String,
-        publicKey: SecKey,
-        overwrite: Bool = false,
-        ttl: String? = nil
-    ) async throws -> NewStateResponse {
+    public mutating func registerNewDevice(overwrite: Bool = false, ttl: String? = nil) async throws {
+        guard let privateKey = identity.privateKey,
+              let publicKey = SecKeyCopyPublicKey(privateKey) else {
+            throw APIError.publicKeyExtractionFailed
+        }
         let jwk = try JwkKey.from(publicKey: publicKey)
+        let requestBody = NewStateRequest(publicKey: jwk, clientId: nil, overwrite: overwrite, ttl: ttl)
+        if logRequestResponse,
+           let encoded = try? JSONEncoder().encode(requestBody),
+           let bodyStr = String(data: encoded, encoding: .utf8) {
+            Logger.api.debug("registerNewDevice request: \(bodyStr)")
+        }
         let responseData = try await Self.sendRequest(
             baseUrl: baseUrl,
-            path: "/r2ps-api/new_state",
-            body: NewStateRequest(publicKey: jwk, clientId: nil, overwrite: overwrite, ttl: ttl)
+            path: "/hsm/v1/device-states",
+            body: requestBody
         )
-        return try JSONDecoder().decode(NewStateResponse.self, from: responseData)
+        if logRequestResponse, let responseStr = String(data: responseData, encoding: .utf8) {
+            Logger.api.debug("registerNewDevice response: \(responseStr)")
+        }
+
+        let raw = try JSONDecoder().decode(NewStateResponse.self, from: responseData)
+        guard raw.status == "OK", let clientId = raw.clientId else {
+            throw APIError.parameterError
+        }
+
+        let devAuthCode = raw.devAuthorizationCode
+
+        identity.clientId = clientId
+        identity.devAuthorizationCode = devAuthCode
+        api = try BFFLayer(clientId: clientId, serverParameters: serverParameters, opaqueClientId: try identity.opaqueClientId(), devAuthorizationCode: devAuthCode)
     }
+
+    // MARK: - Factories
 
     /// Creates a new client: generates a Secure Enclave key, registers with `new_state`, returns client + identity.
     ///
     /// Persist `identity` via ``BFFIdentity/toClientIdentity()`` (e.g. `JSONEncoder` → UserDefaults).
-    /// Restore on next launch with ``loadClient(baseUrl:identity:serverParameters:)``.
+    /// Restore on next launch with ``init(identity:serverParameters:baseUrl:)``.
     ///
     /// - Parameters:
     ///   - baseUrl: Base URL of the BFF service (e.g. `"http://localhost:8088"`).
@@ -294,25 +370,8 @@ public struct BFFHttpClient {
     ) async throws -> (client: BFFHttpClient, identity: BFFIdentity) {
         let keyTag = UUID().uuidString
         let privateKey = try BFFIdentity.generateKey(tag: keyTag)
-        guard let clientPublicKey = SecKeyCopyPublicKey(privateKey) else {
-            throw APIError.publicKeyExtractionFailed
-        }
-        let jwk = try JwkKey.from(publicKey: clientPublicKey)
-
-        let responseData = try await Self.sendRequest(
-            baseUrl: baseUrl,
-            path: "/r2ps-api/new_state",
-            body: NewStateRequest(publicKey: jwk, clientId: nil, overwrite: false, ttl: ttl)
-        )
-        let newStateResponse = try JSONDecoder().decode(NewStateResponse.self, from: responseData)
-
-        guard newStateResponse.status == .ok, let clientId = newStateResponse.clientId else {
-            throw APIError.parameterError
-        }
-
-        let identity = BFFIdentity(clientId: clientId, keyTag: keyTag, devAuthorizationCode: newStateResponse.devAuthorizationCode, privateKey: privateKey)
-        let client = try BFFHttpClient(identity: identity, serverParameters: serverParameters, baseUrl: baseUrl)
-        return (client, identity)
+        let client = try await BFFHttpClient(privateKey: privateKey, keyTag: keyTag, serverParameters: serverParameters, baseUrl: baseUrl)
+        return (client, client.identity)
     }
 
 }

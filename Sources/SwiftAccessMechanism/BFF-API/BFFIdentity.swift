@@ -23,13 +23,13 @@ import OSLog
 public final class BFFIdentity {
 
     /// Server-assigned client UUID.
-    public let clientId: String
+    public internal(set) var clientId: String
 
     /// Keychain `applicationTag` for the SE/Keychain private key.
     public let keyTag: String
 
     /// DEV-ONLY authorization code returned by `new_state`; required for PIN registration.
-    public let devAuthorizationCode: String?
+    public internal(set) var devAuthorizationCode: String?
 
     /// P-256 private key (populated by ``init(from:)`` or set directly on creation).
     fileprivate(set) var privateKey: SecKey?
@@ -70,6 +70,14 @@ public final class BFFIdentity {
         self.clientId = clientId
         self.keyTag = keyTag
         self.devAuthorizationCode = devAuthorizationCode
+        self.privateKey = privateKey
+    }
+
+    /// Pre-registration init — `clientId` and `devAuthorizationCode` are set by ``BFFHttpClient/registerNewDevice(overwrite:ttl:)``.
+    init(privateKey: SecKey, keyTag: String) {
+        self.clientId = ""
+        self.keyTag = keyTag
+        self.devAuthorizationCode = nil
         self.privateKey = privateKey
     }
 
