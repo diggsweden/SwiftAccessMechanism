@@ -74,6 +74,8 @@ struct ProtocolSession {
     /// Session identifier (set after calling ``enterSession(sessionId:sessionKey:)``).
     var sessionId: String? = nil
     let deviceKid: String
+    /// KID of the server JWS public key; sent as `server_kid` in every OuterRequest.
+    let serverKid: String
 
     var encrypter: Encrypter {
         return self.encryption.encrypter
@@ -106,7 +108,7 @@ struct ProtocolSession {
     ///   - serverPublicKey: Server's P-256 public key for ECDH-ES encryption in device mode.
     ///
     /// - Throws: ``Errors/signerCreationFailed``, ``Errors/serverKeyParseError``, or ``Errors/clientKeyParseError`` if key initialization fails.
-    init(clientPrivateKey: SecKey, serverPublicKey: SecKey) throws {
+    init(clientPrivateKey: SecKey, serverPublicKey: SecKey, serverKid: String = "") throws {
         self.clientPrivateKey = clientPrivateKey
         self.serverPublicKey = serverPublicKey
 
@@ -124,6 +126,7 @@ struct ProtocolSession {
         self.encryption = try ProtocolSession.initDeviceEncryption(clientPrivateKey: clientPrivateKey, serverPublicKey: serverPublicKey)
 
         self.deviceKid = try computeJwkThumbprint(privateKey: clientPrivateKey)
+        self.serverKid = serverKid
     }
 
     fileprivate static func initDeviceEncryption(clientPrivateKey: SecKey, serverPublicKey: SecKey) throws -> ProtocolEncryption {
