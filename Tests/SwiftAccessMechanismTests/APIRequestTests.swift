@@ -88,9 +88,9 @@ struct APIRequestTests {
     }
 
     @Test func testCreateSessionWithRequestObject() async throws {
-        var (api, password) = try await Self.setupClient()
-
         do {
+            var (api, password) = try await Self.setupClient()
+
             // Step 1-2: Run consolidated registration (start + finish)
             let finishPakeResponse = try await api.registration(
                 password: password
@@ -137,9 +137,9 @@ struct APIRequestTests {
     }
 
     @Test func testListKeysAfterAuthentication() async throws {
-        var (api, password) = try await Self.setupClient()
-
         do {
+            var (api, password) = try await Self.setupClient()
+
             // Register
             _ = try await api.registration(
                 password: password
@@ -177,9 +177,9 @@ struct APIRequestTests {
 
     // List keys, create a key, then list keys again and expect +1
     @Test func testCreateKeyInHSM() async throws {
-        var (api, password) = try await Self.setupClient()
-
         do {
+            var (api, password) = try await Self.setupClient()
+
             // Register
             _ = try await api.registration(
                 password: password
@@ -227,9 +227,9 @@ struct APIRequestTests {
     }
 
     @Test func testEcdsaSign() async throws {
-        var (api, password) = try await Self.setupClient()
-
         do {
+            var (api, password) = try await Self.setupClient()
+
             // Register
             _ = try await api.registration(
                 password: password
@@ -292,10 +292,10 @@ struct APIRequestTests {
     }
 
     @Test func testChangePinAfterAuthentication() async throws {
-        var (api, password) = try await Self.setupClient()
-        let newPassword = StretchedPIN(data: "newpass".data(using: .utf8)!)
-
         do {
+            var (api, password) = try await Self.setupClient()
+            let newPassword = StretchedPIN(data: "newpass".data(using: .utf8)!)
+
             // Register and authenticate with initial password
             _ = try await api.registration(password: password)
             print("✅ Registered initial PIN")
