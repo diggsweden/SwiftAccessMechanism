@@ -114,7 +114,7 @@ public struct OuterResponse {
 /// let jws = try outerRequest.toJWS(signer: signer, session: session)
 /// // Send JWS string to server
 /// ```
-struct OuterRequest {
+public struct OuterRequest {
     let version: Int32 = 1
     // Protocol-level context constant
     let context: String = "hsm"

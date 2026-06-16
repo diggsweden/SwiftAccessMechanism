@@ -23,13 +23,13 @@ import OSLog
 public final class BFFIdentity {
 
     /// Server-assigned client UUID.
-    public internal(set) var clientId: String
+    public let clientId: String
 
     /// Keychain `applicationTag` for the SE/Keychain private key.
     public let keyTag: String
 
     /// DEV-ONLY authorization code returned by `new_state`; required for PIN registration.
-    public internal(set) var devAuthorizationCode: String?
+    public let devAuthorizationCode: String?
 
     /// P-256 private key (populated by ``init(from:)`` or set directly on creation).
     fileprivate(set) var privateKey: SecKey?
@@ -141,7 +141,7 @@ public final class BFFIdentity {
     /// - Parameter tag: Keychain `applicationTag` to identify the key.
     /// - Returns: Reference to the generated private key.
     /// - Throws: CFError if key generation fails entirely.
-    static func generateKey(tag: String) throws -> SecKey {
+    public static func generateKey(tag: String) throws -> SecKey {
         Logger.sec.debug("\(#function) Generating key tag=\(tag)")
 
         guard let tagData = tag.data(using: .utf8) else {

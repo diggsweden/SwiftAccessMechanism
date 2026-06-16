@@ -92,22 +92,22 @@ public struct BFFLayer {
     }
 
     // Return type for authenticateFinish: both the signed finish request and the client finalization result
-    struct AuthenticateFinishResult {
-        let request: BFFRequest
-        let sessionKey: Data
-        let exportKey: Data
+    public struct AuthenticateFinishResult {
+        public let request: BFFRequest
+        public let sessionKey: Data
+        public let exportKey: Data
     }
 
     // A small container for the results returned by the "start" helpers
-    struct PAKEStartResult {
-        let request: BFFRequest
-        let clientRegistration: Data
+    public struct PAKEStartResult {
+        public let request: BFFRequest
+        public let clientRegistration: Data
         // stored values required for finish
-        let password: StretchedPIN
-        let authorization: String?
+        public let password: StretchedPIN
+        public let authorization: String?
     }
 
-    init(clientId: String, serverParameters: ServerParameters, opaqueClientId: Data, devAuthorizationCode: String? = nil) throws {
+    public init(clientId: String, serverParameters: ServerParameters, opaqueClientId: Data, devAuthorizationCode: String? = nil) throws {
         self.clientId = clientId
         self.serverParameters = serverParameters
         self.opaqueClientId = opaqueClientId
@@ -134,7 +134,7 @@ public struct BFFLayer {
     }
 
     // Create and sign a JWS payload and wrap in BFFRequest
-    func createRequest(outerRequest: OuterRequest, session: ProtocolSession, debugLog: Bool = false) throws -> BFFRequest {
+    public func createRequest(outerRequest: OuterRequest, session: ProtocolSession, debugLog: Bool = false) throws -> BFFRequest {
         let jwsString = try outerRequest.toJWS(signer: session.signer, session: session)
 
         if debugLog {
@@ -149,7 +149,7 @@ public struct BFFLayer {
     }
 
     // Accept raw response bytes directly and delegate to string-based parser
-    static func parseAndValidateResponse(from responseData: Data, with session: ProtocolSession, debugLog: Bool) throws -> ParsedBFFResponse {
+    public static func parseAndValidateResponse(from responseData: Data, with session: ProtocolSession, debugLog: Bool) throws -> ParsedBFFResponse {
         guard let jwsString = String(data: responseData, encoding: .utf8) else {
             Logger.api.error("Response is not valid UTF-8: \(responseData.hexString())")
             throw BFFLayer.APIError.networkError
@@ -158,7 +158,7 @@ public struct BFFLayer {
     }
 
     // Parse and validate the HTTP/JWS response, decrypt inner JWE and return a wrapper
-    static func parseAndValidateResponse(from jwsString: String, with session: ProtocolSession, debugLog: Bool) throws -> ParsedBFFResponse {
+    public static func parseAndValidateResponse(from jwsString: String, with session: ProtocolSession, debugLog: Bool) throws -> ParsedBFFResponse {
         if debugLog {
             Logger.api.debug("Received response (JWS): \(jwsString)")
         }
@@ -185,7 +185,7 @@ public struct BFFLayer {
     }
 
     // Shortcuts for constructing PAKE requests using the OPAQUE client helpers
-    func registrationStart(
+    public func registrationStart(
         password: StretchedPIN,
         with session: ProtocolSession
     ) throws -> PAKEStartResult {
@@ -204,7 +204,7 @@ public struct BFFLayer {
     }
 
     // accept raw response Data and build the registration finish request
-    func registrationFinish(start: PAKEStartResult, responseData: Data, with session: ProtocolSession
+    public func registrationFinish(start: PAKEStartResult, responseData: Data, with session: ProtocolSession
                             , logRequestResponse: Bool = false) throws -> BFFRequest {
         // Parse outer JWS, decrypt inner JWE and obtain PAKE response
         let parsed = try BFFLayer.parseAndValidateResponse(from: responseData, with: session, debugLog: logRequestResponse)
@@ -302,7 +302,7 @@ public struct BFFLayer {
         )
     }
 
-    func authenticateStart(
+    public func authenticateStart(
         password: StretchedPIN,
         with session: ProtocolSession
     ) throws -> PAKEStartResult {
@@ -321,7 +321,7 @@ public struct BFFLayer {
     }
 
     // accept raw response Data and build the authenticate finish request + client finalization
-    func authenticateFinish(start: PAKEStartResult, responseData: Data, with session: ProtocolSession, logRequestResponse: Bool = false) throws -> AuthenticateFinishResult {
+    public func authenticateFinish(start: PAKEStartResult, responseData: Data, with session: ProtocolSession, logRequestResponse: Bool = false) throws -> AuthenticateFinishResult {
         let parsed = try BFFLayer.parseAndValidateResponse(from: responseData, with: session, debugLog: logRequestResponse)
         let pake = try parsed.decodePayload(PakeResponse.self)
         let credentialResponse = try pake.decodedResponseData()

@@ -12,11 +12,11 @@ import Foundation
 
 
 // MARK: - API Request Structure
-struct BFFRequest: Codable {
+public struct BFFRequest: Codable {
     // Client identifier
-    let clientId: String
+    public let clientId: String
     // Compact JWS string containing the signed OuterRequest
-    let outerRequestJws: String
+    public let outerRequestJws: String
 }
 
 // MARK: - device-states endpoint
@@ -27,14 +27,19 @@ struct NewStateRequest: Codable {
     let clientId: String?
     let overwrite: Bool
     let ttl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case publicKey
+        case clientId = "client_id"
+        case overwrite, ttl
+    }
 }
 
 /// Response body from `POST /hsm/v1/device-states`.
 public struct NewStateResponse: Codable {
-    public let status: String
+    public let status: InnerResponse.Status
     /// Server-assigned (or echoed) client identifier.
     public let clientId: String?
-    /// DEV-ONLY authorization code; required for PIN registration.
     public let devAuthorizationCode: String?
     /// Server's current JWS public key; use for device-mode JWE encryption if present.
     let serverJwsPublicKey: JwkKey?

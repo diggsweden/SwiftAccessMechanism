@@ -45,13 +45,9 @@ struct APIRequestTests {
         guard let privateKey = SecKeyCreateRandomKey(attrs, &error) else {
             throw (error?.takeRetainedValue() as? Error) ?? TestError.keyGenerationFailed("key gen failed")
         }
-        return try await BFFHttpClient(
-            privateKey: privateKey,
-            keyTag: keyTag,
-            serverParameters: testServerParameters,
-            baseUrl: baseUrl,
-            overwrite: true
-        )
+
+        let transport = URLSessionBFFTransport(baseUrl: baseUrl)
+        return try await BFFHttpClient.create(transport: transport, privateKey: privateKey, serverParameters: testServerParameters)
     }
 
     // Centralized setup helper used by all tests
@@ -69,10 +65,7 @@ struct APIRequestTests {
             print("✅ new_state: clientId=\(identity.clientId) keyTag=\(identity.keyTag)")
             print("   devAuthorizationCode=\(identity.devAuthorizationCode ?? "nil")")
 
-            // Restore client from persisted identity
-            let restored = try BFFHttpClient(identity: identity, serverParameters: try ServerParameters(serverIdentifier: "dev.cloud-wallet.digg.se".data(using: .ascii)!), baseUrl: baseUrl)
-            _ = restored
-            print("✅ restore via init succeeded")
+            print("✅ createClient succeeded")
         } catch let urlError as URLError {
             switch urlError.code {
             case .cannotConnectToHost, .cannotFindHost, .networkConnectionLost, .notConnectedToInternet, .timedOut:
@@ -367,7 +360,7 @@ struct APIRequestTests {
             default:
                 Issue.record("Unexpected network error: \(urlError.localizedDescription)")
             }
-        } catch BFFHttpClient.APIError.httpError(let code) {
+        } catch URLSessionBFFTransport.TransportError.httpError(let code) {
             print("⚠️ HTTP \(code) from server - dynamic client registration may not be supported on backend")
             return
         } catch {

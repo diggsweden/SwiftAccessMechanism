@@ -235,7 +235,7 @@ public struct JwkKey: Codable {
     /// - Parameter publicKey: P-256 public key (SecKey).
     /// - Returns: `JwkKey` with `kid` set to JWK thumbprint (RFC 7638).
     /// - Throws: Key conversion errors.
-    static func from(publicKey: SecKey) throws -> JwkKey {
+    public static func from(publicKey: SecKey) throws -> JwkKey {
         let ecPublicKey = try ECPublicKey(publicKey: publicKey)
         let kid = try ecPublicKey.thumbprint(algorithm: .SHA256)
         return JwkKey(kty: "EC", crv: ecPublicKey.crv.rawValue, x: ecPublicKey.x, y: ecPublicKey.y, kid: kid)
