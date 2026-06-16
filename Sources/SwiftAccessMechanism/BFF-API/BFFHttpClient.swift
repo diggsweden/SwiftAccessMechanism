@@ -72,7 +72,10 @@ public actor BFFHttpClient {
             )
         }
       
-        let opaqueClientId = Data((jwk.kid ?? "").utf8)
+        guard let kid = jwk.kid else {
+            throw Error.missingKeyId
+        }
+        let opaqueClientId = Data(kid.utf8)
         let layer = try BFFLayer(
             clientId: stateResponse.clientId,
             serverParameters: serverParams,
@@ -101,7 +104,10 @@ public actor BFFHttpClient {
             throw Error.publicKeyExtractionFailed
         }
         let jwk = try JwkKey.from(publicKey: pubKeyRef)
-        let opaqueClientId = Data((jwk.kid ?? "").utf8)
+        guard let kid = jwk.kid else {
+            throw Error.missingKeyId
+        }
+        let opaqueClientId = Data(kid.utf8)
         let layer = try BFFLayer(
             clientId: clientId,
             serverParameters: serverParameters,
@@ -147,7 +153,10 @@ public actor BFFHttpClient {
             devAuthorizationCode: stateResponse.devAuthorizationCode,
             privateKey: privateKey
         )
-        let opaqueClientId = Data((jwk.kid ?? "").utf8)
+        guard let kid = jwk.kid else {
+            throw Error.missingKeyId
+        }
+        let opaqueClientId = Data(kid.utf8)
         let layer = try BFFLayer(
             clientId: stateResponse.clientId,
             serverParameters: effectiveParams,
@@ -256,5 +265,6 @@ public actor BFFHttpClient {
 
     public enum Error: Swift.Error {
         case publicKeyExtractionFailed
+        case missingKeyId
     }
 }
