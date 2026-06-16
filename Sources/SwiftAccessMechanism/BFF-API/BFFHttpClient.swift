@@ -27,16 +27,21 @@ public actor BFFHttpClient {
     private let layer: BFFLayer
     private var session: ProtocolSession
 
+    public let clientId: String
+    public let serverParameters: ServerParameters
+
 #if DEBUG
     private let logEnabled = true
 #else
     private let logEnabled = false
 #endif
 
-    init(transport: any BFFTransport, layer: BFFLayer, session: ProtocolSession) {
+    init(transport: any BFFTransport, layer: BFFLayer, session: ProtocolSession, clientId: String, serverParameters: ServerParameters) {
         self.transport = transport
         self.layer = layer
         self.session = session
+        self.clientId = clientId
+        self.serverParameters = serverParameters
     }
 
     // MARK: - Factories
@@ -78,7 +83,36 @@ public actor BFFHttpClient {
             serverPublicKey: serverParams.serverPublicKey,
             serverKid: serverParams.serverJwsPublicKey.kid ?? ""
         )
-        return BFFHttpClient(transport: transport, layer: layer, session: protocolSession)
+        return BFFHttpClient(transport: transport, layer: layer, session: protocolSession, clientId: stateResponse.clientId, serverParameters: serverParams)
+    }
+
+    /// Resumes a previously registered BFF session using a known client ID and private key.
+    ///
+    /// Use this when the client ID has been persisted across launches and the caller has already
+    /// resolved the `SecKey` (e.g. from Keychain). No network call is made.
+    public static func resume(
+        transport: any BFFTransport,
+        clientId: String,
+        privateKey: SecKey,
+        serverParameters: ServerParameters
+    ) throws -> BFFHttpClient {
+        guard let pubKeyRef = SecKeyCopyPublicKey(privateKey) else {
+            throw Error.publicKeyExtractionFailed
+        }
+        let jwk = try JwkKey.from(publicKey: pubKeyRef)
+        let opaqueClientId = Data((jwk.kid ?? "").utf8)
+        let layer = try BFFLayer(
+            clientId: clientId,
+            serverParameters: serverParameters,
+            opaqueClientId: opaqueClientId,
+            devAuthorizationCode: nil
+        )
+        let protocolSession = try ProtocolSession(
+            clientPrivateKey: privateKey,
+            serverPublicKey: serverParameters.serverPublicKey,
+            serverKid: serverParameters.serverJwsPublicKey.kid ?? ""
+        )
+        return BFFHttpClient(transport: transport, layer: layer, session: protocolSession, clientId: clientId, serverParameters: serverParameters)
     }
 
     /// Creates a direct-to-BFF client using URLSessionBFFTransport.
@@ -124,7 +158,7 @@ public actor BFFHttpClient {
             serverPublicKey: effectiveParams.serverPublicKey,
             serverKid: effectiveParams.serverJwsPublicKey.kid ?? ""
         )
-        return (BFFHttpClient(transport: transport, layer: layer, session: protocolSession), identity)
+        return (BFFHttpClient(transport: transport, layer: layer, session: protocolSession, clientId: stateResponse.clientId, serverParameters: effectiveParams), identity)
     }
 
     // MARK: - OPAQUE Registration

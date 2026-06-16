@@ -52,7 +52,7 @@ public struct NewStateResponse: Codable {
 /// Persisted client identity — store across app launches (e.g. UserDefaults via JSONEncoder).
 ///
 /// Created by ``BFFHttpClient/createClient(baseUrl:serverParameters:ttl:)``.
-/// Restored via ``BFFHttpClient/loadClient(baseUrl:identity:serverParameters:)``.
+/// Restored via ``BFFHttpClient/resume(transport:clientId:privateKey:serverParameters:)``.
 public struct ClientIdentity: Codable {
     /// Server-assigned client UUID.
     public let clientId: String
