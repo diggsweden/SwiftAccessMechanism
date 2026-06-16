@@ -14,8 +14,8 @@ import Foundation
 ///
 /// Provides static methods for all operations: OPAQUE registration/authentication and HSM operations.
 /// Returns ``OuterRequest`` ready to sign with ``OuterRequest/toJWS(signingKey:)``.
-struct ProtocolRequest {
-    /// Result from OPAQUE registration start.
+public struct ProtocolRequest {
+    /// Result from OPAQUE registration/authentication start operations.
     struct RegistrationStartResult {
         /// Outer request ready to sign and send to server.
         let outerRequest: OuterRequest
@@ -252,7 +252,7 @@ struct ProtocolRequest {
     ///
     /// - Returns: ``OuterRequest`` ready to sign and send. Response will be ``HsmCreateKeyResponse``.
     /// - Throws: Encoding errors.
-    static func hsmGenerateKey() throws -> OuterRequest {
+    public static func hsmGenerateKey() throws -> OuterRequest {
         let innerRequest = try InnerRequest(type: .hsmGenerateKey,
                                             jsonData: ["curve": "P-256"])
 
@@ -269,7 +269,7 @@ struct ProtocolRequest {
     ///
     /// - Returns: ``OuterRequest`` ready to sign and send. Response will be ``HsmListResponse``.
     /// - Throws: Encoding errors.
-    static func hsmListKeys() throws -> OuterRequest {
+    public static func hsmListKeys() throws -> OuterRequest {
         let innerRequest = try InnerRequest(type: .hsmListKeys,
                                             jsonData: ["curve": [String]()]
         )
@@ -283,14 +283,15 @@ struct ProtocolRequest {
 
     /// Requests HSM to sign a SHA-256 digest with specified key.
     ///
-    /// Requires session mode. Caller must pre-hash: `Data(SHA256.hash(data: message))`.
+    /// Requires session mode. The `message` parameter must be a SHA-256 digest (32 bytes).
+    /// Prefer ``BFFHttpClient/sign(hsmKeyId:data:stateJws:)``, which hashes automatically.
     ///
     /// - Parameters:
     ///   - hsmKid: HSM key ID (from ``HsmCreateKeyResponse/public_key`` `kid` or ``HsmKeyInfo/kid``).
     ///   - message: SHA-256 digest to sign (32 bytes).
     /// - Returns: ``OuterRequest`` ready to sign and send. Response will be ``SignatureResponse``.
     /// - Throws: Encoding errors.
-    static func hsmSign(hsmKid: String, message: Data) throws -> OuterRequest {
+    public static func hsmSign(hsmKid: String, message: Data) throws -> OuterRequest {
         let innerObj = [
             "hsm_kid": hsmKid,
             "message": message.base64EncodedString()
@@ -303,6 +304,17 @@ struct ProtocolRequest {
             inner: innerRequest,
         )
 
+        return outerRequest
+    }
+
+    /// Requests HSM to delete the specified key.
+    ///
+    /// - Parameter hsmKid: HSM key ID to delete.
+    /// - Returns: ``OuterRequest`` ready to sign and send.
+    /// - Throws: Encoding errors.
+    public static func hsmDeleteKey(hsmKid: String) throws -> OuterRequest {
+        let innerRequest = try InnerRequest(type: .hsmDeleteKey, jsonData: ["hsm_kid": hsmKid])
+        let outerRequest = OuterRequest(inner: innerRequest)
         return outerRequest
     }
 }

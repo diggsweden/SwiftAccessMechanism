@@ -8,6 +8,7 @@
 //
 //  Created by Fredrik Thulin on 2025-12-03.
 //
+import CryptoKit
 import Foundation
 import Security
 import JOSESwift
@@ -51,7 +52,7 @@ struct PakeRequest: Codable {
 /// let pakeResp: PakeResponse = try innerResponse.decodePayload(PakeResponse.self)
 /// let credentialData = try pakeResp.decodedResponseData()
 /// ```
-public struct PakeResponse: Codable {
+public struct PakeResponse: Codable, Sendable {
     /// Base64-encoded OPAQUE message (KE2) or session ID.
     public let responseData: String?
 
@@ -97,7 +98,7 @@ public struct PakeResponse: Codable {
 /// HSM key metadata.
 ///
 /// Returned in ``HsmListResponse`` from HSM list keys operation.
-public struct HsmKeyInfo: Codable {
+public struct HsmKeyInfo: Codable, Sendable {
     /// Key creation timestamp (ISO 8601 format).
     public let createdAt: String
 
@@ -125,7 +126,7 @@ public struct HsmKeyInfo: Codable {
 ///     print("Key: \(keyInfo.kid)")
 /// }
 /// ```
-public struct HsmListResponse: Codable {
+public struct HsmListResponse: Codable, Sendable {
     /// Array of key metadata.
     public let keyInfo: [HsmKeyInfo]
 
@@ -142,7 +143,7 @@ public struct HsmListResponse: Codable {
 /// let createResp: HsmCreateKeyResponse = try innerResponse.decodePayload(HsmCreateKeyResponse.self)
 /// let publicKey = try createResp.public_key.toSecKey()
 /// ```
-public struct HsmCreateKeyResponse: Codable {
+public struct HsmCreateKeyResponse: Codable, Sendable {
     /// Generated key's public key (JWK format).
     public let public_key: JwkKey
 }
@@ -153,25 +154,28 @@ public struct HsmCreateKeyResponse: Codable {
 ///
 /// ```swift
 /// let signResp: SignatureResponse = try innerResponse.decodePayload(SignatureResponse.self)
-/// try verifySignature(publicKey: jwkKey, signature: signResp, digest: digest)
+/// let signature = try signResp.ecdsaSignature()
+/// #expect(jwkKey.toP256PublicKey().isValidSignature(signature, for: message))
 /// ```
-public struct SignatureResponse: Codable {
-    /// Base64-encoded DER signature.
+public struct SignatureResponse: Codable, Sendable {
+    /// Base64url-encoded raw ECDSA signature (P-256 R‖S, IEEE P1363, 64 bytes).
     public let signature: String
 
     public enum Errors: Swift.Error {
         case payloadError
     }
 
-    /// Decodes base64-encoded signature to DER bytes.
+    /// Decodes the raw P1363 signature into a CryptoKit `P256.Signing.ECDSASignature`.
     ///
-    /// - Returns: DER-encoded signature data.
-    /// - Throws: ``Errors/payloadError`` if signature invalid base64.
-    public func toDER() throws -> Data {
-        guard let data = Data(base64Encoded: signature) else {
+    /// - Returns: The parsed ECDSA signature, ready for `P256.Signing.PublicKey.isValidSignature`.
+    /// - Throws: ``Errors/payloadError`` if the signature is not valid base64url or not a
+    ///   well-formed 64-byte P-256 signature.
+    public func ecdsaSignature() throws -> P256.Signing.ECDSASignature {
+        guard let raw = Data(base64URLEncoded: signature),
+              let sig = try? P256.Signing.ECDSASignature(rawRepresentation: raw) else {
             throw Errors.payloadError
         }
-        return data
+        return sig
     }
 }
 
@@ -188,7 +192,7 @@ public struct SignatureResponse: Codable {
 /// let secKey = try jwk.toSecKey()
 /// // Use secKey for signature verification
 /// ```
-public struct JwkKey: Codable {
+public struct JwkKey: Equatable, Codable, Sendable {
     /// Key type ("EC" for elliptic curve).
     public let kty: String
 
@@ -203,6 +207,14 @@ public struct JwkKey: Codable {
 
     /// Key ID (server-assigned identifier, optional).
     public let kid: String?
+
+    public init(kty: String, crv: String, x: String, y: String, kid: String? = nil) {
+        self.kty = kty
+        self.crv = crv
+        self.x = x
+        self.y = y
+        self.kid = kid
+    }
 
     enum CodingKeys: String, CodingKey {
         case kty, crv, x, y, kid
@@ -225,6 +237,18 @@ public struct JwkKey: Codable {
         return try self.toECPublicKey().converted(to: SecKey.self)
     }
 
+    /// Converts JWK to a CryptoKit `P256.Signing.PublicKey` for signature verification.
+    ///
+    /// - Returns: `P256.Signing.PublicKey` built from the JWK `x`/`y` coordinates.
+    /// - Throws: If the coordinates are not valid base64url or not a valid P-256 point.
+    public func toP256PublicKey() throws -> P256.Signing.PublicKey {
+        guard let xData = Data(base64URLEncoded: x), let yData = Data(base64URLEncoded: y) else {
+            throw ParseKeyError.clientKeyParseError
+        }
+        let x963 = Data([0x04]) + xData + yData
+        return try P256.Signing.PublicKey(x963Representation: x963)
+    }
+
     func toECPublicKey() throws -> ECPublicKey {
         let data = try JSONEncoder().encode(self)
         return try ECPublicKey(data: data)
@@ -235,7 +259,7 @@ public struct JwkKey: Codable {
     /// - Parameter publicKey: P-256 public key (SecKey).
     /// - Returns: `JwkKey` with `kid` set to JWK thumbprint (RFC 7638).
     /// - Throws: Key conversion errors.
-    static func from(publicKey: SecKey) throws -> JwkKey {
+    public static func from(publicKey: SecKey) throws -> JwkKey {
         let ecPublicKey = try ECPublicKey(publicKey: publicKey)
         let kid = try ecPublicKey.thumbprint(algorithm: .SHA256)
         return JwkKey(kty: "EC", crv: ecPublicKey.crv.rawValue, x: ecPublicKey.x, y: ecPublicKey.y, kid: kid)

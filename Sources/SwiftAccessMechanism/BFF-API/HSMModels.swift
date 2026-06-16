@@ -12,11 +12,13 @@ import Foundation
 
 
 // MARK: - API Request Structure
-struct BFFRequest: Codable {
+public struct HSMRequest: Codable, Sendable {
     // Client identifier
-    let clientId: String
+    public let clientId: String
     // Compact JWS string containing the signed OuterRequest
-    let outerRequestJws: String
+    public let outerRequestJws: String
+    // Latest state JWS from the server, forwarded with each operation to maintain state continuity
+    public let stateJws: String?
 }
 
 // MARK: - device-states endpoint
@@ -27,14 +29,19 @@ struct NewStateRequest: Codable {
     let clientId: String?
     let overwrite: Bool
     let ttl: String?
+
+    enum CodingKeys: String, CodingKey {
+        case publicKey
+        case clientId = "client_id"
+        case overwrite, ttl
+    }
 }
 
 /// Response body from `POST /hsm/v1/device-states`.
 public struct NewStateResponse: Codable {
-    public let status: String
+    public let status: InnerResponse.Status
     /// Server-assigned (or echoed) client identifier.
     public let clientId: String?
-    /// DEV-ONLY authorization code; required for PIN registration.
     public let devAuthorizationCode: String?
     /// Server's current JWS public key; use for device-mode JWE encryption if present.
     let serverJwsPublicKey: JwkKey?
@@ -47,7 +54,7 @@ public struct NewStateResponse: Codable {
 /// Persisted client identity — store across app launches (e.g. UserDefaults via JSONEncoder).
 ///
 /// Created by ``BFFHttpClient/createClient(baseUrl:serverParameters:ttl:)``.
-/// Restored via ``BFFHttpClient/loadClient(baseUrl:identity:serverParameters:)``.
+/// Restored via ``BFFHttpClient/resume(transport:clientId:privateKey:serverParameters:)``.
 public struct ClientIdentity: Codable {
     /// Server-assigned client UUID.
     public let clientId: String

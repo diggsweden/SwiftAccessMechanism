@@ -69,7 +69,7 @@ See <doc:Protocol-Layer> for detailed API documentation.
 **Purpose:** Provisional HTTP client for early development.
 
 **Components:**
-- ``BFFRequest`` — DTO for REST API
+- ``HSMRequest`` — DTO for REST API
 - ``BFFLayer`` — builds/parses JWS+JWE messages (transport-independent)
 - ``BFFHttpClient`` — HTTP client posting to `/r2ps-api/service`
 

@@ -135,7 +135,7 @@ let layer = try BFFLayer(
 
 // Build request
 let startResult = try layer.registrationStart(password: password, with: session)
-// Returns: PAKEStartResult with .request (BFFRequest) and .clientRegistration
+// Returns: PAKEStartResult with .request (HSMRequest) and .clientRegistration
 
 // Send startResult.request.outerRequestJws (JWS String) via your transport
 
@@ -285,7 +285,7 @@ JWS(
 - `version` is integer 1
 - `context` is always `"hsm"`
 - `JWK("key-id")` = JWK format public key (e.g., `{"kty":"EC","crv":"P-256","x":"...","y":"...","kid":"..."}`)
-- Request body: JSON-encoded ``BFFRequest`` with `clientId` and `outerRequestJws`
+- Request body: JSON-encoded ``HSMRequest`` with `clientId` and `outerRequestJws`
 - Response body: Raw compact JWS string (not JSON-wrapped)
 - Device mode: `ECDH-ES` encryption with ephemeral key
 - Session mode: `dir` (direct symmetric) encryption with OPAQUE session key
@@ -304,6 +304,6 @@ JWS(
 
 - ``BFFHttpClient`` — HTTP client API
 - ``BFFLayer`` — Message builder (transport-independent)
-- ``BFFRequest`` — Request DTO
+- ``HSMRequest`` — Request DTO
 - <doc:Protocol-Layer> — Direct Protocol usage
 - <doc:Getting-Started> — Complete examples

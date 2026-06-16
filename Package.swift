@@ -28,7 +28,7 @@ let package = Package(
             name: "SwiftAccessMechanism",
             dependencies: [.target(name: "OpaqueKE_UniFFI"), "JOSESwift"]
         ),
-        .binaryTarget(name: "OpaqueKE_UniFFI", path: "external/OpaqueKEUniffi.xcframework"),
+        .binaryTarget(name: "OpaqueKE_UniFFI", path: "external/opaque_ke_uniffiFFI.xcframework"),
         .testTarget(
             name: "SwiftAccessMechanismTests",
             dependencies: ["SwiftAccessMechanism"]

@@ -93,32 +93,6 @@ func parseKey(_ key: Data, _ encoding: keyEncoding, _ keyClass: keyClass) throws
     throw ParseKeyError.clientKeyParseError
 }
 
-/// Errors from ``verifySignature(publicKey:signature:digest:)``.
-enum SignatureVerificationError: Error {
-    /// ECDSA signature verification failed.
-    case invalidSignature
-}
-
-/// Verify an ECDSA signature from the HSM against a SHA-256 digest.
-/// Throws `SignatureVerificationError.invalidSignature` if verification fails.
-func verifySignature(publicKey: JwkKey, signature: SignatureResponse, digest: Data) throws {
-    let secKey = try publicKey.toSecKey()
-    let derSig = try signature.toDER()
-
-    var cfError: Unmanaged<CFError>?
-    let valid = SecKeyVerifySignature(
-        secKey,
-        .ecdsaSignatureDigestX962SHA256,
-        digest as CFData,
-        derSig as CFData,
-        &cfError
-    )
-
-    guard valid else {
-        throw SignatureVerificationError.invalidSignature
-    }
-}
-
 /// Errors from ``computeJwkThumbprint(publicKey:)``.
 enum JwkThumbprintError: Error {
     /// Failed to decode base64url thumbprint.

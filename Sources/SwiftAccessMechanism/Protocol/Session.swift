@@ -21,7 +21,7 @@ enum EncryptionType: String, Codable {
     case session = "session"
 }
 
-struct ProtocolEncryption {
+struct ProtocolEncryption: @unchecked Sendable {
     fileprivate let encrypter: Encrypter
     // nil in device mode when clientPrivateKey is a Secure Enclave key (ECPrivateKey
     // construction fails for SE keys). See SECKeyECDHDecryption.swift for fallback.
@@ -49,7 +49,7 @@ struct ProtocolEncryption {
 /// ```
 ///
 /// See ``enterSession(sessionId:sessionKey:)`` for mode transition details.
-struct ProtocolSession {
+public struct ProtocolSession: @unchecked Sendable {
 
     /// Errors thrown by `ProtocolSession`.
     enum Errors: Error {
@@ -106,9 +106,10 @@ struct ProtocolSession {
     /// - Parameters:
     ///   - clientPrivateKey: P-256 private key for signing outer JWS layer.
     ///   - serverPublicKey: Server's P-256 public key for ECDH-ES encryption in device mode.
+    ///   - serverKid: KID of the server's JWS public key (sent in every OuterRequest).
     ///
     /// - Throws: ``Errors/signerCreationFailed``, ``Errors/serverKeyParseError``, or ``Errors/clientKeyParseError`` if key initialization fails.
-    init(clientPrivateKey: SecKey, serverPublicKey: SecKey, serverKid: String = "") throws {
+    public init(clientPrivateKey: SecKey, serverPublicKey: SecKey, serverKid: String = "") throws {
         self.clientPrivateKey = clientPrivateKey
         self.serverPublicKey = serverPublicKey
 
@@ -164,7 +165,7 @@ struct ProtocolSession {
     ///   - sessionKey: 32-byte symmetric key from OPAQUE (from `ClientLoginFinishResult.sessionKey`).
     ///
     /// - Throws: ``Errors/invalidSessionKey`` or ``Errors/failedToCreateDirectDecrypter`` if session key is invalid.
-    mutating func enterSession(sessionId: String, sessionKey: Data) throws {
+    public mutating func enterSession(sessionId: String, sessionKey: Data) throws {
         guard let encrypter = Encrypter(keyManagementAlgorithm: .direct,
                                         contentEncryptionAlgorithm: .A256GCM,
                                         encryptionKey: sessionKey) else {
