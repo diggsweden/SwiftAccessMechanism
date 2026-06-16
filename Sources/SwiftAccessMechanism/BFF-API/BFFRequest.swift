@@ -134,7 +134,7 @@ public struct BFFLayer: Sendable {
     }
 
     // Create and sign a JWS payload and wrap in BFFRequest
-    public func createRequest(outerRequest: OuterRequest, session: ProtocolSession, debugLog: Bool = false) throws -> BFFRequest {
+    public func createRequest(outerRequest: OuterRequest, session: ProtocolSession, stateJws: String? = nil, debugLog: Bool = false) throws -> BFFRequest {
         let jwsString = try outerRequest.toJWS(signer: session.signer, session: session)
 
         if debugLog {
@@ -144,7 +144,8 @@ public struct BFFLayer: Sendable {
 
         return BFFRequest(
             clientId: self.clientId,
-            outerRequestJws: jwsString
+            outerRequestJws: jwsString,
+            stateJws: stateJws
         )
     }
 
@@ -187,13 +188,15 @@ public struct BFFLayer: Sendable {
     // Shortcuts for constructing PAKE requests using the OPAQUE client helpers
     public func registrationStart(
         password: StretchedPIN,
-        with session: ProtocolSession
+        with session: ProtocolSession,
+        stateJws: String? = nil
     ) throws -> PAKEStartResult {
         let start = try ProtocolRequest.registrationStart(password: password, authorization: self.devAuthorizationCode)
 
         let bffRequest = try self.createRequest(
             outerRequest: start.outerRequest,
             session: session,
+            stateJws: stateJws,
             debugLog: self.logRequestResponse
         )
 
@@ -204,22 +207,22 @@ public struct BFFLayer: Sendable {
     }
 
     // accept raw response Data and build the registration finish request
-    public func registrationFinish(start: PAKEStartResult, responseData: Data, with session: ProtocolSession
-                            , logRequestResponse: Bool = false) throws -> BFFRequest {
+    public func registrationFinish(start: PAKEStartResult, responseData: Data, with session: ProtocolSession,
+                                   stateJws: String? = nil, logRequestResponse: Bool = false) throws -> BFFRequest {
         // Parse outer JWS, decrypt inner JWE and obtain PAKE response
         let parsed = try BFFLayer.parseAndValidateResponse(from: responseData, with: session, debugLog: logRequestResponse)
         let pake = try parsed.decodePayload(PakeResponse.self)
         let credentialResponse = try pake.decodedResponseData()
 
         // Delegate to existing inner registrationFinish that accepts credential bytes
-        return try self.registrationFinish(start: start, credentialResponse: credentialResponse, with: session)
+        return try self.registrationFinish(start: start, credentialResponse: credentialResponse, with: session, stateJws: stateJws)
     }
 
     func registrationFinish(
         start: PAKEStartResult,
         credentialResponse: Data,
-        with session: ProtocolSession
-
+        with session: ProtocolSession,
+        stateJws: String? = nil
     ) throws -> BFFRequest {
         let clientFinish = try OpaqueClient.registrationFinish(
             clientRegistration: start.clientRegistration,
@@ -246,6 +249,7 @@ public struct BFFLayer: Sendable {
         let bffRequest = try self.createRequest(
             outerRequest: outerRequest,
             session: session,
+            stateJws: stateJws,
             debugLog: self.logRequestResponse
         )
 
@@ -254,13 +258,15 @@ public struct BFFLayer: Sendable {
 
     func changePinStart(
         newPassword: StretchedPIN,
-        with session: ProtocolSession
+        with session: ProtocolSession,
+        stateJws: String? = nil
     ) throws -> PAKEStartResult {
         let start = try ProtocolRequest.changePinStart(newPassword: newPassword)
 
         let bffRequest = try self.createRequest(
             outerRequest: start.outerRequest,
             session: session,
+            stateJws: stateJws,
             debugLog: self.logRequestResponse
         )
 
@@ -270,7 +276,7 @@ public struct BFFLayer: Sendable {
                                authorization: nil)
     }
 
-    func changePinFinish(start: PAKEStartResult, responseData: Data, with session: ProtocolSession) throws -> BFFRequest {
+    func changePinFinish(start: PAKEStartResult, responseData: Data, with session: ProtocolSession, stateJws: String? = nil) throws -> BFFRequest {
         let parsed = try BFFLayer.parseAndValidateResponse(from: responseData, with: session, debugLog: self.logRequestResponse)
         let pake = try parsed.decodePayload(PakeResponse.self)
         let credentialResponse = try pake.decodedResponseData()
@@ -298,19 +304,22 @@ public struct BFFLayer: Sendable {
         return try self.createRequest(
             outerRequest: outerRequest,
             session: session,
+            stateJws: stateJws,
             debugLog: self.logRequestResponse
         )
     }
 
     public func authenticateStart(
         password: StretchedPIN,
-        with session: ProtocolSession
+        with session: ProtocolSession,
+        stateJws: String? = nil
     ) throws -> PAKEStartResult {
         let start = try ProtocolRequest.authenticateStart(password: password)
 
         let bffRequest = try self.createRequest(
             outerRequest: start.outerRequest,
             session: session,
+            stateJws: stateJws,
             debugLog: self.logRequestResponse
         )
 
@@ -321,7 +330,7 @@ public struct BFFLayer: Sendable {
     }
 
     // accept raw response Data and build the authenticate finish request + client finalization
-    public func authenticateFinish(start: PAKEStartResult, responseData: Data, with session: ProtocolSession, logRequestResponse: Bool = false) throws -> AuthenticateFinishResult {
+    public func authenticateFinish(start: PAKEStartResult, responseData: Data, with session: ProtocolSession, stateJws: String? = nil, logRequestResponse: Bool = false) throws -> AuthenticateFinishResult {
         let parsed = try BFFLayer.parseAndValidateResponse(from: responseData, with: session, debugLog: logRequestResponse)
         let pake = try parsed.decodePayload(PakeResponse.self)
         let credentialResponse = try pake.decodedResponseData()
@@ -330,14 +339,15 @@ public struct BFFLayer: Sendable {
             throw BFFLayer.APIError.parameterError
         }
 
-        return try self.authenticateFinish(start: start, credentialResponse: credentialResponse, sessionId: sessionId, with: session)
+        return try self.authenticateFinish(start: start, credentialResponse: credentialResponse, sessionId: sessionId, with: session, stateJws: stateJws)
     }
 
     func authenticateFinish(
         start: PAKEStartResult,
         credentialResponse: Data,
         sessionId: String,
-        with session: ProtocolSession
+        with session: ProtocolSession,
+        stateJws: String? = nil
     ) throws -> AuthenticateFinishResult {
         let finish = try ProtocolRequest.authenticateFinish(
             clientRegistration: start.clientRegistration,
@@ -352,6 +362,7 @@ public struct BFFLayer: Sendable {
         let sessionRequest = try self.createRequest(
             outerRequest: finish.outerRequest,
             session: session,
+            stateJws: stateJws,
             debugLog: self.logRequestResponse
         )
 

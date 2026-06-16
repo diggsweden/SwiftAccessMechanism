@@ -17,6 +17,8 @@ public struct BFFRequest: Codable, Sendable {
     public let clientId: String
     // Compact JWS string containing the signed OuterRequest
     public let outerRequestJws: String
+    // Latest state JWS from the server, forwarded with each operation to maintain state continuity
+    public let stateJws: String?
 }
 
 // MARK: - device-states endpoint
