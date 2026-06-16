@@ -352,7 +352,7 @@ private func uniffiTraitInterfaceCallWithError<T, E>(
         callStatus.pointee.errorBuf = FfiConverterString.lower(String(describing: error))
     }
 }
-// Initial value and increment amount for handles.
+// Initial value and increment amount for handles. 
 // These ensure that SWIFT handles always have the lowest bit set
 fileprivate let UNIFFI_HANDLEMAP_INITIAL: UInt64 = 1
 fileprivate let UNIFFI_HANDLEMAP_DELTA: UInt64 = 2
@@ -489,7 +489,9 @@ public struct ClientLoginFinishResult: Equatable, Hashable {
         self.exportKey = exportKey
     }
 
+    
 
+    
 }
 
 #if compiler(>=6)
@@ -503,8 +505,8 @@ public struct FfiConverterTypeClientLoginFinishResult: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ClientLoginFinishResult {
         return
             try ClientLoginFinishResult(
-                credentialFinalization: FfiConverterData.read(from: &buf),
-                sessionKey: FfiConverterData.read(from: &buf),
+                credentialFinalization: FfiConverterData.read(from: &buf), 
+                sessionKey: FfiConverterData.read(from: &buf), 
                 exportKey: FfiConverterData.read(from: &buf)
         )
     }
@@ -543,7 +545,9 @@ public struct ClientLoginStartResult: Equatable, Hashable {
         self.clientRegistration = clientRegistration
     }
 
+    
 
+    
 }
 
 #if compiler(>=6)
@@ -557,7 +561,7 @@ public struct FfiConverterTypeClientLoginStartResult: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ClientLoginStartResult {
         return
             try ClientLoginStartResult(
-                credentialRequest: FfiConverterData.read(from: &buf),
+                credentialRequest: FfiConverterData.read(from: &buf), 
                 clientRegistration: FfiConverterData.read(from: &buf)
         )
     }
@@ -595,7 +599,9 @@ public struct ClientRegistrationFinishResult: Equatable, Hashable {
         self.exportKey = exportKey
     }
 
+    
 
+    
 }
 
 #if compiler(>=6)
@@ -609,7 +615,7 @@ public struct FfiConverterTypeClientRegistrationFinishResult: FfiConverterRustBu
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ClientRegistrationFinishResult {
         return
             try ClientRegistrationFinishResult(
-                registrationUpload: FfiConverterData.read(from: &buf),
+                registrationUpload: FfiConverterData.read(from: &buf), 
                 exportKey: FfiConverterData.read(from: &buf)
         )
     }
@@ -647,7 +653,9 @@ public struct ClientRegistrationStartResult: Equatable, Hashable {
         self.clientRegistration = clientRegistration
     }
 
+    
 
+    
 }
 
 #if compiler(>=6)
@@ -661,7 +669,7 @@ public struct FfiConverterTypeClientRegistrationStartResult: FfiConverterRustBuf
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ClientRegistrationStartResult {
         return
             try ClientRegistrationStartResult(
-                registrationRequest: FfiConverterData.read(from: &buf),
+                registrationRequest: FfiConverterData.read(from: &buf), 
                 clientRegistration: FfiConverterData.read(from: &buf)
         )
     }
@@ -699,7 +707,9 @@ public struct ServerLoginStartResult: Equatable, Hashable {
         self.serverLogin = serverLogin
     }
 
+    
 
+    
 }
 
 #if compiler(>=6)
@@ -713,7 +723,7 @@ public struct FfiConverterTypeServerLoginStartResult: FfiConverterRustBuffer {
     public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ServerLoginStartResult {
         return
             try ServerLoginStartResult(
-                credentialResponse: FfiConverterData.read(from: &buf),
+                credentialResponse: FfiConverterData.read(from: &buf), 
                 serverLogin: FfiConverterData.read(from: &buf)
         )
     }
@@ -742,18 +752,20 @@ public func FfiConverterTypeServerLoginStartResult_lower(_ value: ServerLoginSta
 
 public enum Hash2CurveError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
-
-
+    
+    
     case InternalError(String
     )
 
+    
 
+    
 
-
+    
     public var errorDescription: String? {
         String(reflecting: self)
     }
-
+    
 }
 
 #if compiler(>=6)
@@ -770,9 +782,9 @@ public struct FfiConverterTypeHash2CurveError: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
 
+        
 
-
-
+        
         case 1: return .InternalError(
             try FfiConverterString.read(from: &buf)
             )
@@ -784,14 +796,14 @@ public struct FfiConverterTypeHash2CurveError: FfiConverterRustBuffer {
     public static func write(_ value: Hash2CurveError, into buf: inout [UInt8]) {
         switch value {
 
+        
 
-
-
-
+        
+        
         case let .InternalError(v1):
             writeInt(&buf, Int32(1))
             FfiConverterString.write(v1, into: &buf)
-
+            
         }
     }
 }
@@ -814,18 +826,20 @@ public func FfiConverterTypeHash2CurveError_lower(_ value: Hash2CurveError) -> R
 
 public enum LoginError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
-
-
+    
+    
     case Generic(String
     )
 
+    
 
+    
 
-
+    
     public var errorDescription: String? {
         String(reflecting: self)
     }
-
+    
 }
 
 #if compiler(>=6)
@@ -842,9 +856,9 @@ public struct FfiConverterTypeLoginError: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
 
+        
 
-
-
+        
         case 1: return .Generic(
             try FfiConverterString.read(from: &buf)
             )
@@ -856,14 +870,14 @@ public struct FfiConverterTypeLoginError: FfiConverterRustBuffer {
     public static func write(_ value: LoginError, into buf: inout [UInt8]) {
         switch value {
 
+        
 
-
-
-
+        
+        
         case let .Generic(v1):
             writeInt(&buf, Int32(1))
             FfiConverterString.write(v1, into: &buf)
-
+            
         }
     }
 }
@@ -886,18 +900,20 @@ public func FfiConverterTypeLoginError_lower(_ value: LoginError) -> RustBuffer 
 
 public enum RegistrationError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
 
-
-
+    
+    
     case Generic(String
     )
 
+    
 
+    
 
-
+    
     public var errorDescription: String? {
         String(reflecting: self)
     }
-
+    
 }
 
 #if compiler(>=6)
@@ -914,9 +930,9 @@ public struct FfiConverterTypeRegistrationError: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
 
+        
 
-
-
+        
         case 1: return .Generic(
             try FfiConverterString.read(from: &buf)
             )
@@ -928,14 +944,14 @@ public struct FfiConverterTypeRegistrationError: FfiConverterRustBuffer {
     public static func write(_ value: RegistrationError, into buf: inout [UInt8]) {
         switch value {
 
+        
 
-
-
-
+        
+        
         case let .Generic(v1):
             writeInt(&buf, Int32(1))
             FfiConverterString.write(v1, into: &buf)
-
+            
         }
     }
 }
@@ -979,10 +995,15 @@ fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
     }
 }
 /**
- * Completes the OPAQUE login flow on the client side.
+ * Completes the OPAQUE login flow and derives the session key on the client side.
  *
- * This function takes the server's credential response, the client's login state,
- * and the user's password to derive the session key.
+ * # Parameters
+ * - `credential_response`: The server's credential response message.
+ * - `client_registration`: The client's internal login state from `client_login_start`.
+ * - `password`: The user's password.
+ * - `context`: Application-specific context for the session.
+ * - `client_identifier`: The client's identity.
+ * - `server_identifier`: The server's identity.
  */
 public func clientLoginFinish(credentialResponse: Data, clientRegistration: Data, password: Data, context: Data, clientIdentifier: Data, serverIdentifier: Data)throws  -> ClientLoginFinishResult  {
     return try  FfiConverterTypeClientLoginFinishResult_lift(try rustCallWithError(FfiConverterTypeLoginError_lift) {
@@ -1013,7 +1034,7 @@ public func clientLoginStart(password: Data)throws  -> ClientLoginStartResult  {
  * Completes the OPAQUE registration flow on the client side.
  *
  * This function takes the user's password, the client's registration state,
- * and the server's registration response.
+ * the server's registration response, and optional client and server identifiers.
  * It returns a RegistrationUpload to be sent to the server and the export key.
  */
 public func clientRegistrationFinish(password: Data, clientRegistration: Data, registrationResponse: Data, clientIdentifier: Data?, serverIdentifier: Data?)throws  -> ClientRegistrationFinishResult  {
@@ -1082,12 +1103,19 @@ public func hashToCurveRistretto255Sha512(input: Data, dst: Data)throws  -> Data
     )
 })
 }
+public func serverSetup() -> Data  {
+    return try!  FfiConverterData.lift(try! rustCall() {
+    uniffi_opaque_ke_uniffi_fn_func_server_setup($0
+    )
+})
+}
 /**
  * Completes the OPAQUE login flow on the server side.
  *
- * This function takes the server's login state and the client's
- * credential finalization message.
- * It returns the session key.
+ * This function takes the server's login state from the start step,
+ * the client's credential finalization message,
+ * and optional parameters for context and identifiers.
+ * It returns the session key on successful authentication.
  */
 public func serverLoginFinish(serverLogin: Data, credentialFinalization: Data, context: Data?, clientIdentifier: Data?, serverIdentifier: Data?)throws  -> Data  {
     return try  FfiConverterData.lift(try rustCallWithError(FfiConverterTypeLoginError_lift) {
@@ -1106,17 +1134,18 @@ public func serverLoginFinish(serverLogin: Data, credentialFinalization: Data, c
  * This function takes a previously generated server setup,
  * the user's password file (from registration),
  * a credential request from the client,
- * and the client's ID.
+ * a credential identifier to look up the user,
+ * and optional parameters for context and identifiers.
  * It returns a credential response to be sent to the client,
  * and a server login state to be used in the finish step.
  */
-public func serverLoginStart(serverSetup: Data, passwordFile: Data, credentialRequest: Data, clientId: Data, context: Data?, clientIdentifier: Data?, serverIdentifier: Data?)throws  -> ServerLoginStartResult  {
+public func serverLoginStart(serverSetup: Data, passwordFile: Data, credentialRequest: Data, credentialIdentifier: Data, context: Data?, clientIdentifier: Data?, serverIdentifier: Data?)throws  -> ServerLoginStartResult  {
     return try  FfiConverterTypeServerLoginStartResult_lift(try rustCallWithError(FfiConverterTypeLoginError_lift) {
     uniffi_opaque_ke_uniffi_fn_func_server_login_start(
         FfiConverterData.lower(serverSetup),
         FfiConverterData.lower(passwordFile),
         FfiConverterData.lower(credentialRequest),
-        FfiConverterData.lower(clientId),
+        FfiConverterData.lower(credentialIdentifier),
         FfiConverterOptionData.lower(context),
         FfiConverterOptionData.lower(clientIdentifier),
         FfiConverterOptionData.lower(serverIdentifier),$0
@@ -1152,12 +1181,6 @@ public func serverRegistrationStart(serverSetup: Data, registrationRequest: Data
     )
 })
 }
-public func serverSetup() -> Data  {
-    return try!  FfiConverterData.lift(try! rustCall() {
-    uniffi_opaque_ke_uniffi_fn_func_server_setup($0
-    )
-})
-}
 
 private enum InitializationResult {
     case ok
@@ -1174,37 +1197,37 @@ private let initializationResult: InitializationResult = {
     if bindings_contract_version != scaffolding_contract_version {
         return InitializationResult.contractVersionMismatch
     }
-    if (uniffi_opaque_ke_uniffi_checksum_func_client_login_finish() != 21272) {
+    if (uniffi_opaque_ke_uniffi_checksum_func_client_login_finish() != 10030) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_opaque_ke_uniffi_checksum_func_client_login_start() != 64323) {
+    if (uniffi_opaque_ke_uniffi_checksum_func_client_login_start() != 4310) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_opaque_ke_uniffi_checksum_func_client_registration_finish() != 18842) {
+    if (uniffi_opaque_ke_uniffi_checksum_func_client_registration_finish() != 21469) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_opaque_ke_uniffi_checksum_func_client_registration_start() != 57468) {
+    if (uniffi_opaque_ke_uniffi_checksum_func_client_registration_start() != 55213) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_opaque_ke_uniffi_checksum_func_hash_to_curve_p256_sha256() != 50015) {
+    if (uniffi_opaque_ke_uniffi_checksum_func_hash_to_curve_p256_sha256() != 44535) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_opaque_ke_uniffi_checksum_func_hash_to_curve_ristretto255_sha512() != 54433) {
+    if (uniffi_opaque_ke_uniffi_checksum_func_hash_to_curve_ristretto255_sha512() != 49397) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_opaque_ke_uniffi_checksum_func_server_login_finish() != 20456) {
+    if (uniffi_opaque_ke_uniffi_checksum_func_server_setup() != 53710) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_opaque_ke_uniffi_checksum_func_server_login_start() != 28723) {
+    if (uniffi_opaque_ke_uniffi_checksum_func_server_login_finish() != 45094) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_opaque_ke_uniffi_checksum_func_server_registration_finish() != 1440) {
+    if (uniffi_opaque_ke_uniffi_checksum_func_server_login_start() != 28024) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_opaque_ke_uniffi_checksum_func_server_registration_start() != 48087) {
+    if (uniffi_opaque_ke_uniffi_checksum_func_server_registration_finish() != 53317) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_opaque_ke_uniffi_checksum_func_server_setup() != 61649) {
+    if (uniffi_opaque_ke_uniffi_checksum_func_server_registration_start() != 8822) {
         return InitializationResult.apiChecksumMismatch
     }
 

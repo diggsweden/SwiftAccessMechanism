@@ -72,7 +72,7 @@ public struct OpaqueServer {
     ) throws -> ServerLoginStartResult {
 
         return try serverLoginStart(serverSetup: serverSetup, passwordFile: passwordFile!, credentialRequest: clientRequest,
-        clientId: clientId,
+        credentialIdentifier: clientId,
         context: context,
         clientIdentifier: clientIdentifier,
         serverIdentifier: serverIdentifier)
