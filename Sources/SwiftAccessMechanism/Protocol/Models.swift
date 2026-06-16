@@ -188,7 +188,7 @@ public struct SignatureResponse: Codable {
 /// let secKey = try jwk.toSecKey()
 /// // Use secKey for signature verification
 /// ```
-public struct JwkKey: Codable {
+public struct JwkKey: Codable, Sendable {
     /// Key type ("EC" for elliptic curve).
     public let kty: String
 

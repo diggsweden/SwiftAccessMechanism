@@ -6,10 +6,16 @@ import Foundation
 public struct RegisterStateResponse: Sendable {
     public let clientId: String
     public let devAuthorizationCode: String?
+    /// Server's current JWS public key — use for device-mode encryption when present.
+    public let serverJwsPublicKey: JwkKey?
+    /// OPAQUE server identifier returned by server.
+    public let opaqueServerId: String?
 
-    public init(clientId: String, devAuthorizationCode: String?) {
+    public init(clientId: String, devAuthorizationCode: String?, serverJwsPublicKey: JwkKey? = nil, opaqueServerId: String? = nil) {
         self.clientId = clientId
         self.devAuthorizationCode = devAuthorizationCode
+        self.serverJwsPublicKey = serverJwsPublicKey
+        self.opaqueServerId = opaqueServerId
     }
 }
 

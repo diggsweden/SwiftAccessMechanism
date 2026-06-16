@@ -54,8 +54,18 @@ public struct BFFHttpClient {
             throw Error.publicKeyExtractionFailed
         }
         let jwk = try JwkKey.from(publicKey: pubKeyRef)
-        let serverParams = try serverParameters ?? ServerParameters()
+        var serverParams = try serverParameters ?? ServerParameters()
         let stateResponse = try await transport.registerState(publicKey: jwk, overwrite: false, ttl: ttl)
+      
+        if let serverJwk = stateResponse.serverJwsPublicKey,
+           let opaqueServerId = stateResponse.opaqueServerId {
+            serverParams = try ServerParameters(
+                serverJwsPublicKey: serverJwk,
+                opaqueContext: serverParams.opaqueContext,
+                opaqueServerIdentifier: Data(opaqueServerId.utf8)
+            )
+        }
+      
         let opaqueClientId = Data((jwk.kid ?? "").utf8)
         let layer = try BFFLayer(
             clientId: stateResponse.clientId,
@@ -65,7 +75,8 @@ public struct BFFHttpClient {
         )
         let protocolSession = try ProtocolSession(
             clientPrivateKey: privateKey,
-            serverPublicKey: serverParams.serverPublicKey
+            serverPublicKey: serverParams.serverPublicKey,
+            serverKid: serverParams.serverJwsPublicKey.kid ?? ""
         )
         return BFFHttpClient(transport: transport, layer: layer, session: protocolSession)
     }
@@ -85,6 +96,16 @@ public struct BFFHttpClient {
         let transport = URLSessionBFFTransport(baseUrl: baseUrl)
         let jwk = try JwkKey.from(publicKey: publicKey)
         let stateResponse = try await transport.registerState(publicKey: jwk, overwrite: false, ttl: ttl)
+      
+        var effectiveParams = serverParameters
+        if let serverJwk = stateResponse.serverJwsPublicKey, let opaqueServerId = stateResponse.opaqueServerId {
+            effectiveParams = try ServerParameters(
+                serverJwsPublicKey: serverJwk,
+                opaqueContext: serverParameters.opaqueContext,
+                opaqueServerIdentifier: Data(opaqueServerId.utf8)
+            )
+        }
+      
         let identity = BFFIdentity(
             clientId: stateResponse.clientId,
             keyTag: keyTag,
@@ -94,13 +115,14 @@ public struct BFFHttpClient {
         let opaqueClientId = Data((jwk.kid ?? "").utf8)
         let layer = try BFFLayer(
             clientId: stateResponse.clientId,
-            serverParameters: serverParameters,
+            serverParameters: effectiveParams,
             opaqueClientId: opaqueClientId,
             devAuthorizationCode: stateResponse.devAuthorizationCode
         )
         let protocolSession = try ProtocolSession(
             clientPrivateKey: privateKey,
-            serverPublicKey: serverParameters.serverPublicKey
+            serverPublicKey: effectiveParams.serverPublicKey,
+            serverKid: effectiveParams.serverJwsPublicKey.kid ?? ""
         )
         return (BFFHttpClient(transport: transport, layer: layer, session: protocolSession), identity)
     }

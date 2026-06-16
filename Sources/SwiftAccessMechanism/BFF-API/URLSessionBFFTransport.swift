@@ -19,7 +19,12 @@ public struct URLSessionBFFTransport: BFFTransport {
         guard response.status == .ok, let clientId = response.clientId else {
             throw TransportError.invalidResponse
         }
-        return RegisterStateResponse(clientId: clientId, devAuthorizationCode: response.devAuthorizationCode)
+        return RegisterStateResponse(
+            clientId: clientId,
+            devAuthorizationCode: response.devAuthorizationCode,
+            serverJwsPublicKey: response.serverJwsPublicKey,
+            opaqueServerId: response.opaqueServerId
+        )
     }
 
     public func registerPin(request: BFFRequest) async throws -> Data { try await service(request) }
