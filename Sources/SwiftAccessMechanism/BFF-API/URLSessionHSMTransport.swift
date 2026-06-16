@@ -5,7 +5,7 @@ import Foundation
 
 /// Routes all signed JWT operations to `/hsm/v1/operations`.
 /// The wallet app uses GatewayApiClient (in WalletGateway) instead.
-public struct URLSessionBFFTransport: BFFTransport {
+public struct URLSessionHSMTransport: HSMTransport {
     private let baseUrl: String
 
     public init(baseUrl: String) {
@@ -27,15 +27,7 @@ public struct URLSessionBFFTransport: BFFTransport {
         )
     }
 
-    public func registerPin(request: BFFRequest) async throws -> Data { try await service(request) }
-    public func createSession(request: BFFRequest) async throws -> Data { try await service(request) }
-    public func changePin(request: BFFRequest) async throws -> Data { try await service(request) }
-    public func createKey(request: BFFRequest) async throws -> Data { try await service(request) }
-    public func listKeys(request: BFFRequest) async throws -> Data { try await service(request) }
-    public func sign(request: BFFRequest) async throws -> Data { try await service(request) }
-    public func deleteKey(request: BFFRequest) async throws { _ = try await service(request) }
-
-    private func service(_ request: BFFRequest) async throws -> Data {
+    public func perform(_ request: HSMRequest, operation: HSMOperation) async throws -> Data {
         try await post(path: "/hsm/v1/operations", body: request)
     }
 

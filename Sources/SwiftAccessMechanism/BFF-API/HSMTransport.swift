@@ -19,23 +19,29 @@ public struct RegisterStateResponse: Sendable {
     }
 }
 
-/// - `URLSessionBFFTransport` is the built-in direct-to-BFF implementation.
+/// Identifies the HSM operation being performed, used for logging and tracing.
+public enum HSMOperation: String, Sendable {
+    case registerPin
+    case createSession
+    case changePin
+    case createKey
+    case listKeys
+    case sign
+    case deleteKey
+}
+
+/// - `URLSessionHSMTransport` is the built-in direct-to-BFF implementation.
 /// - `GatewayApiClient` (WalletGateway) conforms to this for gateway-proxied use.
 ///
-/// All JWT-carrying methods receive a fully-constructed `BFFRequest` (which bundles
+/// All JWT-carrying methods receive a fully-constructed `HSMRequest` (which bundles
 /// `clientId` and `outerRequestJws`). Gateway implementations use only `outerRequestJws`;
 /// the URLSession implementation uses both fields to build the request body.
 ///
-/// Methods return `Data` (not `String`) so callers can pass results directly to
+/// `perform` returns `Data` (not `String`) so callers can pass results directly to
 /// `BFFLayer.registrationFinish(start:responseData:with:)` and `authenticateFinish`
 /// without an intermediate `Data(string.utf8)` conversion.
-public protocol BFFTransport: Sendable {
+public protocol HSMTransport: Sendable {
     func registerState(publicKey: JwkKey, overwrite: Bool, ttl: String?) async throws -> RegisterStateResponse
-    func registerPin(request: BFFRequest) async throws -> Data
-    func createSession(request: BFFRequest) async throws -> Data
-    func changePin(request: BFFRequest) async throws -> Data
-    func createKey(request: BFFRequest) async throws -> Data
-    func listKeys(request: BFFRequest) async throws -> Data
-    func sign(request: BFFRequest) async throws -> Data
-    func deleteKey(request: BFFRequest) async throws
+    @discardableResult
+    func perform(_ request: HSMRequest, operation: HSMOperation) async throws -> Data
 }

@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: EUPL-1.2
 
 //
-//  BFFRequest.swift
+//  HSMRequest.swift
 //  SwiftAccessMechanism
 //
 //  Created by Fredrik Thulin on 2025-11-28.
@@ -57,7 +57,7 @@ public struct BFFLayer: Sendable {
     }
 
     fileprivate let logRequestResponse: Bool = true
-    fileprivate let clientId: String // For BFFRequest
+    fileprivate let clientId: String // For HSMRequest
     fileprivate let serverParameters: ServerParameters
     fileprivate let opaqueClientId: Data // For OPAQUE operations
     fileprivate let devAuthorizationCode: String? // DEV-ONLY: required for registration
@@ -93,14 +93,14 @@ public struct BFFLayer: Sendable {
 
     // Return type for authenticateFinish: both the signed finish request and the client finalization result
     public struct AuthenticateFinishResult {
-        public let request: BFFRequest
+        public let request: HSMRequest
         public let sessionKey: Data
         public let exportKey: Data
     }
 
     // A small container for the results returned by the "start" helpers
     public struct PAKEStartResult {
-        public let request: BFFRequest
+        public let request: HSMRequest
         public let clientRegistration: Data
         // stored values required for finish
         public let password: StretchedPIN
@@ -133,8 +133,8 @@ public struct BFFLayer: Sendable {
         }
     }
 
-    // Create and sign a JWS payload and wrap in BFFRequest
-    public func createRequest(outerRequest: OuterRequest, session: ProtocolSession, stateJws: String? = nil, debugLog: Bool = false) throws -> BFFRequest {
+    // Create and sign a JWS payload and wrap in HSMRequest
+    public func createRequest(outerRequest: OuterRequest, session: ProtocolSession, stateJws: String? = nil, debugLog: Bool = false) throws -> HSMRequest {
         let jwsString = try outerRequest.toJWS(signer: session.signer, session: session)
 
         if debugLog {
@@ -142,7 +142,7 @@ public struct BFFLayer: Sendable {
             Logger.api.debug("Created JWS request: \(jwsString)")
         }
 
-        return BFFRequest(
+        return HSMRequest(
             clientId: self.clientId,
             outerRequestJws: jwsString,
             stateJws: stateJws
@@ -208,7 +208,7 @@ public struct BFFLayer: Sendable {
 
     // accept raw response Data and build the registration finish request
     public func registrationFinish(start: PAKEStartResult, responseData: Data, with session: ProtocolSession,
-                                   stateJws: String? = nil, logRequestResponse: Bool = false) throws -> BFFRequest {
+                                   stateJws: String? = nil, logRequestResponse: Bool = false) throws -> HSMRequest {
         // Parse outer JWS, decrypt inner JWE and obtain PAKE response
         let parsed = try BFFLayer.parseAndValidateResponse(from: responseData, with: session, debugLog: logRequestResponse)
         let pake = try parsed.decodePayload(PakeResponse.self)
@@ -223,7 +223,7 @@ public struct BFFLayer: Sendable {
         credentialResponse: Data,
         with session: ProtocolSession,
         stateJws: String? = nil
-    ) throws -> BFFRequest {
+    ) throws -> HSMRequest {
         let clientFinish = try OpaqueClient.registrationFinish(
             clientRegistration: start.clientRegistration,
             password: start.password.data,
@@ -276,7 +276,7 @@ public struct BFFLayer: Sendable {
                                authorization: nil)
     }
 
-    func changePinFinish(start: PAKEStartResult, responseData: Data, with session: ProtocolSession, stateJws: String? = nil) throws -> BFFRequest {
+    func changePinFinish(start: PAKEStartResult, responseData: Data, with session: ProtocolSession, stateJws: String? = nil) throws -> HSMRequest {
         let parsed = try BFFLayer.parseAndValidateResponse(from: responseData, with: session, debugLog: self.logRequestResponse)
         let pake = try parsed.decodePayload(PakeResponse.self)
         let credentialResponse = try pake.decodedResponseData()

@@ -24,7 +24,7 @@ public actor BFFHttpClient {
         }
     }
 
-    private let transport: any BFFTransport
+    private let transport: any HSMTransport
     private let layer: BFFLayer
     private var session: ProtocolSession
 
@@ -37,7 +37,7 @@ public actor BFFHttpClient {
     private let logEnabled = false
 #endif
 
-    init(transport: any BFFTransport, layer: BFFLayer, session: ProtocolSession, clientId: String, serverParameters: ServerParameters) {
+    init(transport: any HSMTransport, layer: BFFLayer, session: ProtocolSession, clientId: String, serverParameters: ServerParameters) {
         self.transport = transport
         self.layer = layer
         self.session = session
@@ -51,7 +51,7 @@ public actor BFFHttpClient {
     ///
     /// Primary entry point for both gateway-proxied and direct transport.
     public static func create(
-        transport: any BFFTransport,
+        transport: any HSMTransport,
         privateKey: SecKey,
         serverParameters: ServerParameters? = nil,
         ttl: String? = nil
@@ -92,7 +92,7 @@ public actor BFFHttpClient {
     /// Use this when the client ID has been persisted across launches and the caller has already
     /// resolved the `SecKey` (e.g. from Keychain). No network call is made.
     public static func resume(
-        transport: any BFFTransport,
+        transport: any HSMTransport,
         clientId: String,
         privateKey: SecKey,
         serverParameters: ServerParameters
@@ -116,7 +116,7 @@ public actor BFFHttpClient {
         return BFFHttpClient(transport: transport, layer: layer, session: protocolSession, clientId: clientId, serverParameters: serverParameters)
     }
 
-    /// Creates a direct-to-BFF client using URLSessionBFFTransport.
+    /// Creates a direct-to-BFF client using URLSessionHSMTransport.
     /// Generates a new SE key, registers with the server, returns client + identity.
     public static func createClient(
         baseUrl: String,
@@ -128,7 +128,7 @@ public actor BFFHttpClient {
         guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
             throw Error.publicKeyExtractionFailed
         }
-        let transport = URLSessionBFFTransport(baseUrl: baseUrl)
+        let transport = URLSessionHSMTransport(baseUrl: baseUrl)
         let jwk = try JwkKey.from(publicKey: publicKey)
         let stateResponse = try await transport.registerState(publicKey: jwk, overwrite: false, ttl: ttl)
       
@@ -166,9 +166,9 @@ public actor BFFHttpClient {
 
     public func registration(password: StretchedPIN, stateJws: String? = nil) async throws -> PakeResponse {
         let start = try layer.registrationStart(password: password, with: session, stateJws: stateJws)
-        let startData = try await transport.registerPin(request: start.request)
+        let startData = try await transport.perform(start.request, operation: .registerPin)
         let finish = try layer.registrationFinish(start: start, responseData: startData, with: session, stateJws: stateJws)
-        let finishData = try await transport.registerPin(request: finish)
+        let finishData = try await transport.perform(finish, operation: .registerPin)
         let parsed = try BFFLayer.parseAndValidateResponse(from: finishData, with: session, debugLog: logEnabled)
         return try parsed.decodePayload(PakeResponse.self)
     }
@@ -177,9 +177,9 @@ public actor BFFHttpClient {
 
     public func authenticate(password: StretchedPIN, stateJws: String? = nil) async throws -> AuthenticationResult {
         let start = try layer.authenticateStart(password: password, with: session, stateJws: stateJws)
-        let startData = try await transport.createSession(request: start.request)
+        let startData = try await transport.perform(start.request, operation: .createSession)
         let finish = try layer.authenticateFinish(start: start, responseData: startData, with: session, stateJws: stateJws)
-        let finishData = try await transport.createSession(request: finish.request)
+        let finishData = try await transport.perform(finish.request, operation: .createSession)
         let parsed = try BFFLayer.parseAndValidateResponse(from: finishData, with: session, debugLog: logEnabled)
         if let sessionId = parsed.outer.sessionId {
             try session.enterSession(sessionId: sessionId, sessionKey: finish.sessionKey)
@@ -202,9 +202,9 @@ public actor BFFHttpClient {
     /// - Parameter newPassword: Stretched new PIN from ``PINStretch/stretchPin(_:)``.
     public func changePin(newPassword: StretchedPIN, stateJws: String? = nil) async throws {
         let start = try layer.changePinStart(newPassword: newPassword, with: session, stateJws: stateJws)
-        let startData = try await transport.changePin(request: start.request)
+        let startData = try await transport.perform(start.request, operation: .changePin)
         let finishRequest = try layer.changePinFinish(start: start, responseData: startData, with: session, stateJws: stateJws)
-        let finishData = try await transport.changePin(request: finishRequest)
+        let finishData = try await transport.perform(finishRequest, operation: .changePin)
         _ = try BFFLayer.parseAndValidateResponse(from: finishData, with: session, debugLog: logEnabled)
         try session.exitSession()
     }
@@ -217,7 +217,7 @@ public actor BFFHttpClient {
             session: session,
             stateJws: stateJws
         )
-        let data = try await transport.createKey(request: req)
+        let data = try await transport.perform(req, operation: .createKey)
         let parsed = try BFFLayer.parseAndValidateResponse(from: data, with: session, debugLog: logEnabled)
         return try parsed.decodePayload(HsmCreateKeyResponse.self)
     }
@@ -228,7 +228,7 @@ public actor BFFHttpClient {
             session: session,
             stateJws: stateJws
         )
-        let data = try await transport.listKeys(request: req)
+        let data = try await transport.perform(req, operation: .listKeys)
         let parsed = try BFFLayer.parseAndValidateResponse(from: data, with: session, debugLog: logEnabled)
         return try parsed.decodePayload(HsmListResponse.self)
     }
@@ -240,7 +240,7 @@ public actor BFFHttpClient {
             session: session,
             stateJws: stateJws
         )
-        let data = try await transport.sign(request: req)
+        let data = try await transport.perform(req, operation: .sign)
         let parsed = try BFFLayer.parseAndValidateResponse(from: data, with: session, debugLog: logEnabled)
         return try parsed.decodePayload(SignatureResponse.self)
     }
@@ -251,7 +251,7 @@ public actor BFFHttpClient {
             session: session,
             stateJws: stateJws
         )
-        try await transport.deleteKey(request: req)
+        try await transport.perform(req, operation: .deleteKey)
     }
 
     public enum Error: Swift.Error {

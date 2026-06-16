@@ -46,7 +46,7 @@ struct APIRequestTests {
             throw (error?.takeRetainedValue() as? Error) ?? TestError.keyGenerationFailed("key gen failed")
         }
 
-        let transport = URLSessionBFFTransport(baseUrl: baseUrl)
+        let transport = URLSessionHSMTransport(baseUrl: baseUrl)
         return try await BFFHttpClient.create(transport: transport, privateKey: privateKey, serverParameters: testServerParameters)
     }
 
@@ -357,7 +357,7 @@ struct APIRequestTests {
             default:
                 Issue.record("Unexpected network error: \(urlError.localizedDescription)")
             }
-        } catch URLSessionBFFTransport.TransportError.httpError(let code) {
+        } catch URLSessionHSMTransport.TransportError.httpError(let code) {
             print("⚠️ HTTP \(code) from server - dynamic client registration may not be supported on backend")
             return
         } catch {

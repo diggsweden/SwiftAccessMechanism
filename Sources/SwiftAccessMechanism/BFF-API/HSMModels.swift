@@ -12,7 +12,7 @@ import Foundation
 
 
 // MARK: - API Request Structure
-public struct BFFRequest: Codable, Sendable {
+public struct HSMRequest: Codable, Sendable {
     // Client identifier
     public let clientId: String
     // Compact JWS string containing the signed OuterRequest

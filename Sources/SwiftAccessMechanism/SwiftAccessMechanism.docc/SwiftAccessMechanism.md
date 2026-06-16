@@ -101,7 +101,7 @@ See <doc:Session-Lifecycle> for detailed state transitions.
 
 - <doc:BFF-HTTP-Client>
 - ``BFFLayer``
-- ``BFFRequest``
+- ``HSMRequest``
 
 ### PIN Stretching & Secure Enclave
 
