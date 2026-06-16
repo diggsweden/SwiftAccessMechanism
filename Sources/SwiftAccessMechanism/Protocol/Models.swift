@@ -168,7 +168,7 @@ public struct SignatureResponse: Codable, Sendable {
     /// - Returns: DER-encoded signature data.
     /// - Throws: ``Errors/payloadError`` if signature invalid base64.
     public func toDER() throws -> Data {
-        guard let data = Data(base64Encoded: signature) else {
+        guard let data = Data(base64URLEncoded: signature) else {
             throw Errors.payloadError
         }
         return data
