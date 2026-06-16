@@ -283,7 +283,8 @@ public struct ProtocolRequest {
 
     /// Requests HSM to sign a SHA-256 digest with specified key.
     ///
-    /// Requires session mode. Caller must pre-hash: `Data(SHA256.hash(data: message))`.
+    /// Requires session mode. The `message` parameter must be a SHA-256 digest (32 bytes).
+    /// Prefer ``BFFHttpClient/sign(hsmKeyId:data:stateJws:)``, which hashes automatically.
     ///
     /// - Parameters:
     ///   - hsmKid: HSM key ID (from ``HsmCreateKeyResponse/public_key`` `kid` or ``HsmKeyInfo/kid``).

@@ -246,13 +246,10 @@ struct APIRequestTests {
             }
             let key = keyInfo.publicKey
 
-            // Compute tbs_hash (SHA-256 of a test message)
             let message = "test message".data(using: .utf8)!
-            let digest = CryptoKit.SHA256.hash(data: message)
-            let tbsHash = Data(digest)
+            let tbsHash = Data(CryptoKit.SHA256.hash(data: message))
 
-            // Ask HSM to sign — server should return raw ASN.1 ECDSA signature bytes
-            let signatureResponse = try await api.sign(hsmKeyId: key.kid!, digest: tbsHash)
+            let signatureResponse = try await api.sign(hsmKeyId: key.kid!, data: message)
 
             let signatureDER = try signatureResponse.toDER()
             let pub = try key.toSecKey()

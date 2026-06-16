@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Digg - Agency for Digital Government
 // SPDX-License-Identifier: EUPL-1.2
 
+import CryptoKit
 import Foundation
 import Security
 
@@ -232,7 +233,8 @@ public actor BFFHttpClient {
         return try parsed.decodePayload(HsmListResponse.self)
     }
 
-    public func sign(hsmKeyId: String, digest: Data, stateJws: String? = nil) async throws -> SignatureResponse {
+    public func sign(hsmKeyId: String, data: Data, stateJws: String? = nil) async throws -> SignatureResponse {
+        let digest = Data(SHA256.hash(data: data))
         let req = try layer.createRequest(
             outerRequest: try ProtocolRequest.hsmSign(hsmKid: hsmKeyId, message: digest),
             session: session,
