@@ -51,7 +51,7 @@ struct PakeRequest: Codable {
 /// let pakeResp: PakeResponse = try innerResponse.decodePayload(PakeResponse.self)
 /// let credentialData = try pakeResp.decodedResponseData()
 /// ```
-public struct PakeResponse: Codable {
+public struct PakeResponse: Codable, Sendable {
     /// Base64-encoded OPAQUE message (KE2) or session ID.
     public let responseData: String?
 
@@ -97,7 +97,7 @@ public struct PakeResponse: Codable {
 /// HSM key metadata.
 ///
 /// Returned in ``HsmListResponse`` from HSM list keys operation.
-public struct HsmKeyInfo: Codable {
+public struct HsmKeyInfo: Codable, Sendable {
     /// Key creation timestamp (ISO 8601 format).
     public let createdAt: String
 
@@ -125,7 +125,7 @@ public struct HsmKeyInfo: Codable {
 ///     print("Key: \(keyInfo.kid)")
 /// }
 /// ```
-public struct HsmListResponse: Codable {
+public struct HsmListResponse: Codable, Sendable {
     /// Array of key metadata.
     public let keyInfo: [HsmKeyInfo]
 
@@ -142,7 +142,7 @@ public struct HsmListResponse: Codable {
 /// let createResp: HsmCreateKeyResponse = try innerResponse.decodePayload(HsmCreateKeyResponse.self)
 /// let publicKey = try createResp.public_key.toSecKey()
 /// ```
-public struct HsmCreateKeyResponse: Codable {
+public struct HsmCreateKeyResponse: Codable, Sendable {
     /// Generated key's public key (JWK format).
     public let public_key: JwkKey
 }
@@ -155,7 +155,7 @@ public struct HsmCreateKeyResponse: Codable {
 /// let signResp: SignatureResponse = try innerResponse.decodePayload(SignatureResponse.self)
 /// try verifySignature(publicKey: jwkKey, signature: signResp, digest: digest)
 /// ```
-public struct SignatureResponse: Codable {
+public struct SignatureResponse: Codable, Sendable {
     /// Base64-encoded DER signature.
     public let signature: String
 
@@ -188,7 +188,7 @@ public struct SignatureResponse: Codable {
 /// let secKey = try jwk.toSecKey()
 /// // Use secKey for signature verification
 /// ```
-public struct JwkKey: Codable, Sendable {
+public struct JwkKey: Equatable, Codable, Sendable {
     /// Key type ("EC" for elliptic curve).
     public let kty: String
 
@@ -203,6 +203,14 @@ public struct JwkKey: Codable, Sendable {
 
     /// Key ID (server-assigned identifier, optional).
     public let kid: String?
+
+    public init(kty: String, crv: String, x: String, y: String, kid: String? = nil) {
+        self.kty = kty
+        self.crv = crv
+        self.x = x
+        self.y = y
+        self.kid = kid
+    }
 
     enum CodingKeys: String, CodingKey {
         case kty, crv, x, y, kid

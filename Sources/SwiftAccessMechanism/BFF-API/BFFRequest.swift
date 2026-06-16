@@ -46,7 +46,7 @@ import OSLog
 /// // Parse response
 /// let parsed = try layer.parsePakeRegistrationStartResponse(serverResponse: responseString)
 /// ```
-public struct BFFLayer {
+public struct BFFLayer: Sendable {
     // Errors used by the inner API (independent of HTTP client)
     enum APIError: Error {
         case parameterError
@@ -63,7 +63,7 @@ public struct BFFLayer {
     fileprivate let devAuthorizationCode: String? // DEV-ONLY: required for registration
 
     /// Parsed BFF response with typed payload decoding.
-    public struct ParsedBFFResponse {
+    public struct ParsedBFFResponse: Sendable {
         /// Outer response (JWS layer).
         public let outer: OuterResponse
 

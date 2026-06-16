@@ -24,7 +24,7 @@ import OSLog
 /// let innerResponse = outerResponse.innerResponse
 /// let payload: PakeResponse = try innerResponse.decodePayload(PakeResponse.self)
 /// ```
-public struct OuterResponse {
+public struct OuterResponse: Sendable {
     /// Protocol version from server.
     public let version: Int32
 

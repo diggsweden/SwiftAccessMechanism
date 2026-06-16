@@ -9,9 +9,9 @@ import Security
 /// Use `BFFHttpClient.create(transport:privateKey:)` as the primary entry point.
 /// - For direct-to-BFF access: `BFFHttpClient.createClient(baseUrl:serverParameters:)`.
 /// - For gateway-proxied access (wallet app): pass `GatewayApiClient` as transport.
-public struct BFFHttpClient {
+public actor BFFHttpClient {
 
-    public struct AuthenticationResult {
+    public struct AuthenticationResult: Sendable {
         public let sessionKey: Data
         public let exportKey: Data
         public let response: BFFLayer.ParsedBFFResponse
@@ -140,7 +140,7 @@ public struct BFFHttpClient {
 
     // MARK: - OPAQUE Authentication
 
-    public mutating func authenticate(password: StretchedPIN) async throws -> AuthenticationResult {
+    public func authenticate(password: StretchedPIN) async throws -> AuthenticationResult {
         let start = try layer.authenticateStart(password: password, with: session)
         let startData = try await transport.createSession(request: start.request)
         let finish = try layer.authenticateFinish(start: start, responseData: startData, with: session)
@@ -165,7 +165,7 @@ public struct BFFHttpClient {
     /// session is reset to device mode, requiring re-authentication before further requests.
     ///
     /// - Parameter newPassword: Stretched new PIN from ``PINStretch/stretchPin(_:)``.
-    public mutating func changePin(newPassword: StretchedPIN) async throws {
+    public func changePin(newPassword: StretchedPIN) async throws {
         let start = try layer.changePinStart(newPassword: newPassword, with: session)
         let startData = try await transport.changePin(request: start.request)
         let finishRequest = try layer.changePinFinish(start: start, responseData: startData, with: session)

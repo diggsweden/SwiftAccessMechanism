@@ -19,7 +19,7 @@ import OSLog
 /// Wraps the 32-byte output of the PIN-stretching operation. Callers cannot construct
 /// this type directly — it can only be obtained from ``PINStretch/stretch(input:)``,
 /// which ensures the raw PIN bytes are never passed directly to OPAQUE.
-public struct StretchedPIN: Equatable {
+public struct StretchedPIN: Equatable, Sendable {
     internal let data: Data
 
     /// Number of bytes in the stretched key (always 32).

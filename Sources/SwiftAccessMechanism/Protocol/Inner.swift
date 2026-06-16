@@ -125,7 +125,7 @@ public struct ServerError: Error {
 /// let innerResponse: InnerResponse = outerResponse.innerResponse
 /// let payload: HsmCreateKeyResponse = try innerResponse.decodePayload(HsmCreateKeyResponse.self)
 /// ```
-public struct InnerResponse: Codable {
+public struct InnerResponse: Codable, Sendable {
     /// Response status.
     public enum Status: String, Codable, Sendable {
         case ok = "OK"

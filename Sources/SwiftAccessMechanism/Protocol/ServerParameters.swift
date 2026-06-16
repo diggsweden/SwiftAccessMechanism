@@ -27,7 +27,7 @@ import Security
 /// let client = try BFFHttpClient(identity: BFFIdentity(from: storedIdentity),
 ///                                serverParameters: params, baseUrl: url)
 /// ```
-public struct ServerParameters: Codable {
+public struct ServerParameters: Codable, @unchecked Sendable {
     /// Server's P-256 public key in JWK format (for ECDH-ES encryption and JWS verification).
     public let serverJwsPublicKey: JwkKey
 

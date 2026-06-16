@@ -21,7 +21,7 @@ enum EncryptionType: String, Codable {
     case session = "session"
 }
 
-struct ProtocolEncryption {
+struct ProtocolEncryption: @unchecked Sendable {
     fileprivate let encrypter: Encrypter
     // nil in device mode when clientPrivateKey is a Secure Enclave key (ECPrivateKey
     // construction fails for SE keys). See SECKeyECDHDecryption.swift for fallback.
@@ -49,7 +49,7 @@ struct ProtocolEncryption {
 /// ```
 ///
 /// See ``enterSession(sessionId:sessionKey:)`` for mode transition details.
-public struct ProtocolSession {
+public struct ProtocolSession: @unchecked Sendable {
 
     /// Errors thrown by `ProtocolSession`.
     enum Errors: Error {
