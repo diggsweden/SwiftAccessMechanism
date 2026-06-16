@@ -247,25 +247,17 @@ struct APIRequestTests {
             let key = keyInfo.publicKey
 
             let message = "test message".data(using: .utf8)!
-            let tbsHash = Data(CryptoKit.SHA256.hash(data: message))
 
+            // sign(hsmKeyId:data:) hashes the raw data internally, so the signature is over
+            // SHA-256(message). The server returns a raw P1363 signature; verify it directly
+            // with CryptoKit, letting isValidSignature(_:for:) hash the message.
             let signatureResponse = try await api.sign(hsmKeyId: key.kid!, data: message)
 
-            let signatureDER = try signatureResponse.toDER()
-            let pub = try key.toSecKey()
+            let signature = try signatureResponse.ecdsaSignature()
+            let pub = try key.toP256PublicKey()
+            #expect(pub.isValidSignature(signature, for: message))
 
-            // Verify the ASN.1 ECDSA signature over the provided digest using SecKeyVerifySignature
-            var cfError: Unmanaged<CFError>?
-            let verified = SecKeyVerifySignature(pub, SecKeyAlgorithm.ecdsaSignatureDigestX962SHA256,
-                                                 tbsHash as CFData, signatureDER as CFData, &cfError)
-
-            #expect(verified == true)
-
-            let verified2 = SecKeyVerifySignature(pub, SecKeyAlgorithm.ecdsaSignatureMessageX962SHA256,
-                                                  message as CFData, signatureDER as CFData, &cfError)
-            #expect(verified2 == true)
-
-            print("✅ ECDSA digest and message signature verification successful")
+            print("✅ ECDSA message signature verification successful")
 
         } catch let urlError as URLError {
             switch urlError.code {

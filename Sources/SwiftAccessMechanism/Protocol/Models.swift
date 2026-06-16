@@ -8,6 +8,7 @@
 //
 //  Created by Fredrik Thulin on 2025-12-03.
 //
+import CryptoKit
 import Foundation
 import Security
 import JOSESwift
@@ -153,25 +154,28 @@ public struct HsmCreateKeyResponse: Codable, Sendable {
 ///
 /// ```swift
 /// let signResp: SignatureResponse = try innerResponse.decodePayload(SignatureResponse.self)
-/// try verifySignature(publicKey: jwkKey, signature: signResp, digest: digest)
+/// let signature = try signResp.ecdsaSignature()
+/// #expect(jwkKey.toP256PublicKey().isValidSignature(signature, for: message))
 /// ```
 public struct SignatureResponse: Codable, Sendable {
-    /// Base64-encoded DER signature.
+    /// Base64url-encoded raw ECDSA signature (P-256 R‖S, IEEE P1363, 64 bytes).
     public let signature: String
 
     public enum Errors: Swift.Error {
         case payloadError
     }
 
-    /// Decodes base64-encoded signature to DER bytes.
+    /// Decodes the raw P1363 signature into a CryptoKit `P256.Signing.ECDSASignature`.
     ///
-    /// - Returns: DER-encoded signature data.
-    /// - Throws: ``Errors/payloadError`` if signature invalid base64.
-    public func toDER() throws -> Data {
-        guard let data = Data(base64URLEncoded: signature) else {
+    /// - Returns: The parsed ECDSA signature, ready for `P256.Signing.PublicKey.isValidSignature`.
+    /// - Throws: ``Errors/payloadError`` if the signature is not valid base64url or not a
+    ///   well-formed 64-byte P-256 signature.
+    public func ecdsaSignature() throws -> P256.Signing.ECDSASignature {
+        guard let raw = Data(base64URLEncoded: signature),
+              let sig = try? P256.Signing.ECDSASignature(rawRepresentation: raw) else {
             throw Errors.payloadError
         }
-        return data
+        return sig
     }
 }
 
@@ -231,6 +235,18 @@ public struct JwkKey: Equatable, Codable, Sendable {
     /// - Throws: Conversion errors if JWK format invalid.
     public func toSecKey() throws -> SecKey {
         return try self.toECPublicKey().converted(to: SecKey.self)
+    }
+
+    /// Converts JWK to a CryptoKit `P256.Signing.PublicKey` for signature verification.
+    ///
+    /// - Returns: `P256.Signing.PublicKey` built from the JWK `x`/`y` coordinates.
+    /// - Throws: If the coordinates are not valid base64url or not a valid P-256 point.
+    public func toP256PublicKey() throws -> P256.Signing.PublicKey {
+        guard let xData = Data(base64URLEncoded: x), let yData = Data(base64URLEncoded: y) else {
+            throw ParseKeyError.clientKeyParseError
+        }
+        let x963 = Data([0x04]) + xData + yData
+        return try P256.Signing.PublicKey(x963Representation: x963)
     }
 
     func toECPublicKey() throws -> ECPublicKey {
