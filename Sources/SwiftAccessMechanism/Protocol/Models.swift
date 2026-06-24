@@ -156,23 +156,48 @@ public struct HsmCreateKeyResponse: Codable {
 /// try verifySignature(publicKey: jwkKey, signature: signResp, digest: digest)
 /// ```
 public struct SignatureResponse: Codable {
-    /// Base64-encoded DER signature.
+    /// Base64url-encoded P1363 signature bytes (r‖s, 64 bytes for P-256).
     public let signature: String
 
     public enum Errors: Swift.Error {
         case payloadError
     }
 
-    /// Decodes base64-encoded signature to DER bytes.
+    /// Decodes the server's base64url-encoded P1363 signature and converts it to DER.
     ///
-    /// - Returns: DER-encoded signature data.
-    /// - Throws: ``Errors/payloadError`` if signature invalid base64.
+    /// The server serialises raw P1363 bytes (r‖s) with URL-safe base64, no padding.
+    /// Apple's `SecKeyVerifySignature` requires X9.62 DER, so this method converts.
+    ///
+    /// - Returns: ASN.1 DER-encoded ECDSA signature.
+    /// - Throws: ``Errors/payloadError`` if the signature is missing, invalid base64url, or not exactly 64 bytes.
     public func toDER() throws -> Data {
-        guard let data = Data(base64Encoded: signature) else {
+        // Decode base64url (URL-safe, no padding) → P1363 bytes
+        let normalized = signature
+            .replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        let padded = normalized + String(repeating: "=", count: (4 - normalized.count % 4) % 4)
+        guard let raw = Data(base64Encoded: padded), raw.count == 64 else {
             throw Errors.payloadError
         }
-        return data
+        // Convert P1363 (r‖s) → ASN.1 DER SEQUENCE { INTEGER r, INTEGER s }
+        return try p1363ToDER(raw)
     }
+}
+
+private func p1363ToDER(_ raw: Data) throws -> Data {
+    let r = Data(raw[0..<32])
+    let s = Data(raw[32..<64])
+
+    func derInt(_ bytes: Data) -> Data {
+        var stripped = Data(bytes.drop(while: { $0 == 0 }))
+        if stripped.isEmpty { stripped = Data([0]) }
+        if stripped[stripped.startIndex] & 0x80 != 0 { stripped = Data([0x00]) + stripped }
+        return Data([0x02, UInt8(stripped.count)]) + stripped
+    }
+
+    let body = derInt(r) + derInt(s)
+    guard body.count <= 0x7f else { throw SignatureResponse.Errors.payloadError }
+    return Data([0x30, UInt8(body.count)]) + body
 }
 
 // MARK: - JWK
