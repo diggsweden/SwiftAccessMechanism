@@ -45,11 +45,17 @@ public struct BFFHttpClient {
 
     /// Shared setup: creates ``ProtocolSession`` and ``BFFLayer`` from identity + server params.
     private static func setUp(identity: BFFIdentity, serverParameters: ServerParameters) throws -> (ProtocolSession, BFFLayer) {
-        guard let clientPrivateKey = identity.privateKey else {
+        guard let jwsKey = identity.jwsPrivateKey, let jweKey = identity.jwePrivateKey else {
             throw APIError.noPrivateKey
         }
         let serverKid = serverParameters.serverJwsPublicKey.kid ?? ""
-        let session = try ProtocolSession(clientPrivateKey: clientPrivateKey, serverPublicKey: serverParameters.serverPublicKey, serverKid: serverKid)
+        let session = try ProtocolSession(
+            clientJwsPrivateKey: jwsKey,
+            clientJwePrivateKey: jweKey,
+            serverJwsPublicKey: serverParameters.serverPublicKey,
+            serverJwePublicKey: serverParameters.serverJweSecKey,
+            serverKid: serverKid
+        )
         let api = try BFFLayer(clientId: identity.clientId, serverParameters: serverParameters, opaqueClientId: identity.opaqueClientId(), devAuthorizationCode: identity.devAuthorizationCode)
         return (session, api)
     }
@@ -58,7 +64,7 @@ public struct BFFHttpClient {
 
     /// Loads an existing registered identity.
     ///
-    /// Use ``init(privateKey:keyTag:serverParameters:baseUrl:overwrite:)`` to register a new device.
+    /// Use ``createClient(baseUrl:serverParameters:ttl:)`` to register a new device.
     public init(identity: BFFIdentity, serverParameters: ServerParameters, baseUrl: String) throws {
         let (session, api) = try Self.setUp(identity: identity, serverParameters: serverParameters)
         self.identity = identity
@@ -68,19 +74,17 @@ public struct BFFHttpClient {
         self.api = api
     }
 
-    /// Creates and registers a new device with the server.
+    /// Registers a new device with the server using a pre-built identity.
     ///
-    /// Generates or uses the provided private key, calls ``registerNewDevice(overwrite:ttl:)`` to
-    /// obtain a server-assigned `clientId` and `devAuthorizationCode`, then finishes setup.
+    /// Calls ``registerNewDevice(overwrite:ttl:)`` to obtain a server-assigned `clientId`
+    /// and `devAuthorizationCode`, then finishes setup.
     ///
     /// - Parameters:
-    ///   - privateKey: P-256 private key for this device.
-    ///   - keyTag: Keychain tag identifying the private key.
+    ///   - identity: Pre-built identity with JWS and JWE key pair already populated.
     ///   - serverParameters: Server crypto parameters.
     ///   - baseUrl: Base URL of the BFF service.
     ///   - overwrite: Pass `true` to replace any existing server-side state for this key.
-    public init(privateKey: SecKey, keyTag: String, serverParameters: ServerParameters, baseUrl: String, overwrite: Bool = false) async throws {
-        let identity = BFFIdentity(privateKey: privateKey, keyTag: keyTag)
+    public init(identity: BFFIdentity, serverParameters: ServerParameters, baseUrl: String, overwrite: Bool) async throws {
         let (session, api) = try Self.setUp(identity: identity, serverParameters: serverParameters)
         self.identity = identity
         self.serverParameters = serverParameters
@@ -321,12 +325,15 @@ public struct BFFHttpClient {
     ///   - ttl: Optional session TTL hint.
     /// - Throws: Network or server errors.
     public mutating func registerNewDevice(overwrite: Bool = false, ttl: String? = nil) async throws {
-        guard let privateKey = identity.privateKey,
-              let publicKey = SecKeyCopyPublicKey(privateKey) else {
+        guard let jwsPrivateKey = identity.jwsPrivateKey,
+              let jwePrivateKey = identity.jwePrivateKey,
+              let jwsPublicKey = SecKeyCopyPublicKey(jwsPrivateKey),
+              let jwePublicKey = SecKeyCopyPublicKey(jwePrivateKey) else {
             throw APIError.publicKeyExtractionFailed
         }
-        let jwk = try JwkKey.from(publicKey: publicKey)
-        let requestBody = NewStateRequest(publicKey: jwk, clientId: nil, overwrite: overwrite, ttl: ttl)
+        let jwsJwk = try JwkKey.from(publicKey: jwsPublicKey)
+        let jweJwk = try JwkKey.from(publicKey: jwePublicKey)
+        let requestBody = NewStateRequest(clientJwsPublicKey: jwsJwk, clientJwePublicKey: jweJwk, clientId: nil, overwrite: overwrite, ttl: ttl)
         if logRequestResponse,
            let encoded = try? JSONEncoder().encode(requestBody),
            let bodyStr = String(data: encoded, encoding: .utf8) {
@@ -346,29 +353,33 @@ public struct BFFHttpClient {
             throw APIError.parameterError
         }
 
-        let devAuthCode = raw.devAuthorizationCode
-
         identity.clientId = clientId
-        identity.devAuthorizationCode = devAuthCode
+        identity.devAuthorizationCode = raw.devAuthorizationCode
 
-        if let serverJwk = raw.serverJwsPublicKey,
-           let opaqueServerId = raw.opaqueServerId,
-           let privateKey = identity.privateKey {
+        if let serverJwsJwk = raw.serverJwsPublicKey, let opaqueServerId = raw.opaqueServerId {
+            let serverJweJwk = raw.serverJwePublicKey ?? serverJwsJwk
             let updatedParams = try ServerParameters(
-                serverJwsPublicKey: serverJwk,
+                serverJwsPublicKey: serverJwsJwk,
+                serverJwePublicKey: serverJweJwk,
                 opaqueContext: serverParameters.opaqueContext,
                 opaqueServerIdentifier: Data(opaqueServerId.utf8)
             )
             serverParameters = updatedParams
-            session = try ProtocolSession(clientPrivateKey: privateKey, serverPublicKey: updatedParams.serverPublicKey, serverKid: serverJwk.kid ?? "")
+            session = try ProtocolSession(
+                clientJwsPrivateKey: jwsPrivateKey,
+                clientJwePrivateKey: jwePrivateKey,
+                serverJwsPublicKey: updatedParams.serverPublicKey,
+                serverJwePublicKey: updatedParams.serverJweSecKey,
+                serverKid: serverJwsJwk.kid ?? ""
+            )
         }
 
-        api = try BFFLayer(clientId: clientId, serverParameters: serverParameters, opaqueClientId: try identity.opaqueClientId(), devAuthorizationCode: devAuthCode)
+        api = try BFFLayer(clientId: clientId, serverParameters: serverParameters, opaqueClientId: try identity.opaqueClientId(), devAuthorizationCode: raw.devAuthorizationCode)
     }
 
     // MARK: - Factories
 
-    /// Creates a new client: generates a Secure Enclave key, registers with `new_state`, returns client + identity.
+    /// Creates a new client: generates Secure Enclave JWS and JWE key pairs, registers with `new_state`.
     ///
     /// Persist `identity` via ``BFFIdentity/toClientIdentity()`` (e.g. `JSONEncoder` → UserDefaults).
     /// Restore on next launch with ``init(identity:serverParameters:baseUrl:)``.
@@ -384,9 +395,12 @@ public struct BFFHttpClient {
         serverParameters: ServerParameters,
         ttl: String? = nil
     ) async throws -> (client: BFFHttpClient, identity: BFFIdentity) {
-        let keyTag = UUID().uuidString
-        let privateKey = try BFFIdentity.generateKey(tag: keyTag)
-        let client = try await BFFHttpClient(privateKey: privateKey, keyTag: keyTag, serverParameters: serverParameters, baseUrl: baseUrl)
+        let jwsTag = UUID().uuidString
+        let jweTag = UUID().uuidString
+        let jwsKey = try BFFIdentity.generateKey(tag: jwsTag)
+        let jweKey = try BFFIdentity.generateKey(tag: jweTag)
+        let identity = BFFIdentity(jwsPrivateKey: jwsKey, jwsKeyTag: jwsTag, jwePrivateKey: jweKey, jweKeyTag: jweTag)
+        let client = try await BFFHttpClient(identity: identity, serverParameters: serverParameters, baseUrl: baseUrl, overwrite: false)
         return (client, client.identity)
     }
 

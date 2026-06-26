@@ -13,10 +13,10 @@ import Foundation
 import Security
 import OSLog
 
-/// Device identity for BFF protocol: manages a P-256 key pair and server-assigned client ID.
+/// Device identity for BFF protocol: manages two P-256 key pairs and server-assigned client ID.
 ///
 /// On first use, call ``BFFHttpClient/createClient(baseUrl:serverParameters:ttl:)`` to generate
-/// a Secure Enclave key and register with the server. Persist the returned identity via
+/// Secure Enclave keys and register with the server. Persist the returned identity via
 /// ``toClientIdentity()`` and restore it on subsequent launches with ``init(from:)``.
 ///
 /// Modeled after `AMSecureEnclave` — manages only key lifecycle, no HTTP.
@@ -26,13 +26,19 @@ public final class BFFIdentity {
     public internal(set) var clientId: String
 
     /// Keychain `applicationTag` for the SE/Keychain private key.
-    public let keyTag: String
+    public let jwsKeyTag: String
+
+    /// Keychain `applicationTag` for the JWE decryption key.
+    public let jweKeyTag: String
 
     /// DEV-ONLY authorization code returned by `new_state`; required for PIN registration.
     public internal(set) var devAuthorizationCode: String?
 
     /// P-256 private key (populated by ``init(from:)`` or set directly on creation).
-    fileprivate(set) var privateKey: SecKey?
+    fileprivate(set) var jwsPrivateKey: SecKey?
+
+    /// JWE decryption private key.
+    fileprivate(set) var jwePrivateKey: SecKey?
 
     /// Errors from Secure Enclave / Keychain operations.
     public enum Errors: Error {
@@ -54,38 +60,43 @@ public final class BFFIdentity {
 
     // MARK: - Init
 
-    /// Restores identity from a persisted ``ClientIdentity``, reloading the private key from Keychain.
+    /// Restores identity from a persisted ``ClientIdentity``, reloading both keys from Keychain.
     ///
     /// - Parameter identity: Snapshot previously returned by ``toClientIdentity()``.
-    /// - Throws: ``Errors/keyFetchError`` if the key is not found in Keychain.
+    /// - Throws: ``Errors/keyFetchError`` if a key is not found in Keychain.
     public init(from identity: ClientIdentity) throws {
         self.clientId = identity.clientId
-        self.keyTag = identity.keyTag
+        self.jwsKeyTag = identity.jwsKeyTag
+        self.jweKeyTag = identity.jweKeyTag
         self.devAuthorizationCode = identity.devAuthorizationCode
-        try self.loadKey()
+        try self.loadKeys()
     }
 
-    /// Internal memberwise init — used by `BFFHttpClient` factories and `getTestClient`.
-    init(clientId: String, keyTag: String, devAuthorizationCode: String?, privateKey: SecKey) {
+    /// Internal memberwise init — used by `BFFHttpClient` factories.
+    init(clientId: String, jwsKeyTag: String, jweKeyTag: String, devAuthorizationCode: String?, jwsPrivateKey: SecKey, jwePrivateKey: SecKey) {
         self.clientId = clientId
-        self.keyTag = keyTag
+        self.jwsKeyTag = jwsKeyTag
+        self.jweKeyTag = jweKeyTag
         self.devAuthorizationCode = devAuthorizationCode
-        self.privateKey = privateKey
+        self.jwsPrivateKey = jwsPrivateKey
+        self.jwePrivateKey = jwePrivateKey
     }
 
     /// Pre-registration init — `clientId` and `devAuthorizationCode` are set by ``BFFHttpClient/registerNewDevice(overwrite:ttl:)``.
-    init(privateKey: SecKey, keyTag: String) {
+    init(jwsPrivateKey: SecKey, jwsKeyTag: String, jwePrivateKey: SecKey, jweKeyTag: String) {
         self.clientId = ""
-        self.keyTag = keyTag
+        self.jwsKeyTag = jwsKeyTag
+        self.jweKeyTag = jweKeyTag
         self.devAuthorizationCode = nil
-        self.privateKey = privateKey
+        self.jwsPrivateKey = jwsPrivateKey
+        self.jwePrivateKey = jwePrivateKey
     }
 
     // MARK: - Derived properties
 
     /// JWK thumbprint of the public key as ASCII data — used as OPAQUE client identifier (RFC 7638).
     func opaqueClientId() throws -> Data {
-        guard let privateKey = self.privateKey else { throw Errors.internalError }
+        guard let privateKey = self.jwsPrivateKey else { throw Errors.internalError }
         guard let publicKey = SecKeyCopyPublicKey(privateKey) else {
             throw Errors.publicKeyExtractionFailed
         }
@@ -100,39 +111,40 @@ public final class BFFIdentity {
 
     /// Snapshot of this identity for persistence (e.g. `JSONEncoder` → UserDefaults).
     public func toClientIdentity() -> ClientIdentity {
-        ClientIdentity(clientId: clientId, keyTag: keyTag, devAuthorizationCode: devAuthorizationCode)
+        ClientIdentity(clientId: clientId, jwsKeyTag: jwsKeyTag, jweKeyTag: jweKeyTag, devAuthorizationCode: devAuthorizationCode)
     }
 
     // MARK: - Key lifecycle
 
-    /// Loads the private key from Keychain by `keyTag`.
-    func loadKey() throws {
-        Logger.sec.debug("\(#function) Loading key tag=\(self.keyTag)")
+    /// Loads both JWS and JWE private keys from Keychain.
+    func loadKeys() throws {
+        self.jwsPrivateKey = try Self.loadKeyFromKeychain(tag: jwsKeyTag)
+        self.jwePrivateKey = try Self.loadKeyFromKeychain(tag: jweKeyTag)
+    }
 
-        guard let tagData = keyTag.data(using: .utf8) else {
-            throw Errors.encodingFailed
-        }
+    private static func loadKeyFromKeychain(tag: String) throws -> SecKey {
+        Logger.sec.debug("\(#function) tag=\(tag)")
+        guard let tagData = tag.data(using: .utf8) else { throw Errors.encodingFailed }
         let query: NSDictionary = [
             kSecClass: kSecClassKey,
             kSecAttrApplicationTag: tagData,
             kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom,
             kSecReturnRef: true
         ]
-
         var item: CFTypeRef?
         let status = SecItemCopyMatching(query as CFDictionary, &item)
         guard status == errSecSuccess else {
-            Logger.sec.error("\(#function) Failed loading key tag=\(self.keyTag): \(status)")
+            Logger.sec.error("\(#function) failed tag=\(tag): \(status)")
             throw Errors.keyFetchError
         }
-
         guard let key = item, CFGetTypeID(key) == SecKeyGetTypeID() else {
-            Logger.sec.error("\(#function) Keychain item is not a SecKey")
+            Logger.sec.error("\(#function) item is not a SecKey tag=\(tag)")
             throw Errors.invalidKeychainItem
         }
         // Force cast is safe: CFGetTypeID verified this is a SecKey
-        self.privateKey = (key as! SecKey)
-        Logger.sec.debug("\(#function) Loaded key tag=\(self.keyTag)")
+        let secKey = (key as! SecKey)
+        Logger.sec.debug("\(#function) loaded tag=\(tag)")
+        return secKey
     }
 
     /// Generates a P-256 private key, stored permanently in the Secure Enclave.
@@ -195,28 +207,29 @@ public final class BFFIdentity {
         return key
     }
 
-    /// Deletes the private key from Keychain.
+    /// Deletes both JWS and JWE private keys from Keychain.
     ///
     /// - Throws: ``Errors/keyDeleteError`` if deletion fails.
     public func deleteKey() throws {
-        Logger.sec.debug("\(#function) Deleting key tag=\(self.keyTag)")
+        try Self.deleteKeyFromKeychain(tag: jwsKeyTag)
+        try Self.deleteKeyFromKeychain(tag: jweKeyTag)
+        self.jwsPrivateKey = nil
+        self.jwePrivateKey = nil
+    }
 
-        guard let tagData = keyTag.data(using: .utf8) else {
-            throw Errors.encodingFailed
-        }
+    private static func deleteKeyFromKeychain(tag: String) throws {
+        Logger.sec.debug("\(#function) tag=\(tag)")
+        guard let tagData = tag.data(using: .utf8) else { throw Errors.encodingFailed }
         let query: NSDictionary = [
             kSecClass: kSecClassKey,
             kSecAttrApplicationTag: tagData,
             kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom
         ]
-
         let status = SecItemDelete(query as CFDictionary)
         guard status == errSecSuccess else {
-            Logger.sec.error("\(#function) Failed deleting key tag=\(self.keyTag): \(status)")
+            Logger.sec.error("\(#function) failed tag=\(tag): \(status)")
             throw Errors.keyDeleteError
         }
-
-        self.privateKey = nil
-        Logger.sec.info("\(#function) Deleted key tag=\(self.keyTag)")
+        Logger.sec.info("\(#function) deleted tag=\(tag)")
     }
 }

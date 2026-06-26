@@ -23,7 +23,7 @@ enum EncryptionType: String, Codable {
 
 struct ProtocolEncryption {
     fileprivate let encrypter: Encrypter
-    // nil in device mode when clientPrivateKey is a Secure Enclave key (ECPrivateKey
+    // nil in device mode when clientJwePrivateKey is a Secure Enclave key (ECPrivateKey
     // construction fails for SE keys). See SECKeyECDHDecryption.swift for fallback.
     fileprivate let decrypter: Decrypter?
     fileprivate let header: JWEHeader
@@ -61,8 +61,10 @@ struct ProtocolSession {
         case notInSessionMode
     }
 
-    fileprivate let clientPrivateKey: SecKey
-    fileprivate let serverPublicKey: SecKey
+    fileprivate let clientJwsPrivateKey: SecKey
+    fileprivate let clientJwePrivateKey: SecKey
+    fileprivate let serverJwsPublicKey: SecKey
+    fileprivate let serverJwePublicKey: SecKey
 
     fileprivate var encryption: ProtocolEncryption
     let signer: Signer  // Sign outer JWS:es using client private key
@@ -98,41 +100,51 @@ struct ProtocolSession {
         // SE key: decrypter is nil because ECPrivateKey(privateKey:) failed at init.
         // TODO: Remove once JOSESwift supports SE keys natively (PR #460 or equivalent).
         Logger.sec.warning("Using SE fallback decryption — fix upstream JOSESwift SE support")
-        return try decryptDeviceJWE(privateKey: clientPrivateKey, compactJWE: compactJWE)
+        return try decryptDeviceJWE(privateKey: clientJwePrivateKey, compactJWE: compactJWE)
     }
 
     /// Initializes session in device mode with ECDH-ES encryption.
     ///
     /// - Parameters:
-    ///   - clientPrivateKey: P-256 private key for signing outer JWS layer.
-    ///   - serverPublicKey: Server's P-256 public key for ECDH-ES encryption in device mode.
+    ///   - clientJwsPrivateKey: P-256 private key for signing outer JWS layer.
+    ///   - clientJwePrivateKey: P-256 private key for decrypting inner JWE responses from server.
+    ///   - serverJwsPublicKey: Server's P-256 public key for verifying outer JWS responses.
+    ///   - serverJwePublicKey: Server's P-256 public key for ECDH-ES encryption in device mode.
     ///
     /// - Throws: ``Errors/signerCreationFailed``, ``Errors/serverKeyParseError``, or ``Errors/clientKeyParseError`` if key initialization fails.
-    init(clientPrivateKey: SecKey, serverPublicKey: SecKey, serverKid: String = "") throws {
-        self.clientPrivateKey = clientPrivateKey
-        self.serverPublicKey = serverPublicKey
+    init(clientJwsPrivateKey: SecKey, clientJwePrivateKey: SecKey, serverJwsPublicKey: SecKey, serverJwePublicKey: SecKey, serverKid: String = "") throws {
+        self.clientJwsPrivateKey = clientJwsPrivateKey
+        self.clientJwePrivateKey = clientJwePrivateKey
+        self.serverJwsPublicKey = serverJwsPublicKey
+        self.serverJwePublicKey = serverJwePublicKey
 
         /// Signer/verifier for the outer request/response
-        guard let signer = Signer(signatureAlgorithm: .ES256, key: clientPrivateKey) else {
+        guard let signer = Signer(signatureAlgorithm: .ES256, key: clientJwsPrivateKey) else {
             throw Errors.signerCreationFailed
         }
         self.signer = signer
 
-        guard let verifier = Verifier(signatureAlgorithm: .ES256, key: serverPublicKey) else {
+        guard let verifier = Verifier(signatureAlgorithm: .ES256, key: serverJwsPublicKey) else {
             throw Errors.serverKeyParseError
         }
         self.verifier = verifier
 
-        self.encryption = try ProtocolSession.initDeviceEncryption(clientPrivateKey: clientPrivateKey, serverPublicKey: serverPublicKey)
-
-        self.deviceKid = try computeJwkThumbprint(privateKey: clientPrivateKey)
+        self.encryption = try ProtocolSession.initDeviceEncryption(clientJwePrivateKey: clientJwePrivateKey, serverJwePublicKey: serverJwePublicKey)
+        self.deviceKid = try computeJwkThumbprint(privateKey: clientJwsPrivateKey)
         self.serverKid = serverKid
     }
 
-    fileprivate static func initDeviceEncryption(clientPrivateKey: SecKey, serverPublicKey: SecKey) throws -> ProtocolEncryption {
+    /// Convenience init when JWS and JWE keys are the same (single-key config).
+    init(clientPrivateKey: SecKey, serverPublicKey: SecKey, serverKid: String = "") throws {
+        try self.init(clientJwsPrivateKey: clientPrivateKey, clientJwePrivateKey: clientPrivateKey,
+                      serverJwsPublicKey: serverPublicKey, serverJwePublicKey: serverPublicKey,
+                      serverKid: serverKid)
+    }
+
+    fileprivate static func initDeviceEncryption(clientJwePrivateKey: SecKey, serverJwePublicKey: SecKey) throws -> ProtocolEncryption {
         /// Encrypter/decrypter for the inner request/response
         /// NOTE: This starts out in "device" encryption mode. After a successful authentication, the enterSession() function below takes us to "session" encryption mode.
-        let josePublicKey = try ECPublicKey(publicKey: serverPublicKey)
+        let josePublicKey = try ECPublicKey(publicKey: serverJwePublicKey)
         guard let encrypter = Encrypter(keyManagementAlgorithm: .ECDH_ES,
                                         contentEncryptionAlgorithm: .A256GCM,
                                         encryptionKey: josePublicKey) else {
@@ -143,7 +155,7 @@ struct ProtocolSession {
         // for regular keys; fails silently (nil) for Secure Enclave keys because
         // ECPrivateKey(privateKey:) calls SecKeyCopyExternalRepresentation which SE blocks.
         // Outer.swift falls back to decryptDeviceJWE() (SECKeyECDHDecryption.swift) when nil.
-        let decrypter = (try? ECPrivateKey(privateKey: clientPrivateKey))
+        let decrypter = (try? ECPrivateKey(privateKey: clientJwePrivateKey))
             .flatMap { Decrypter(keyManagementAlgorithm: .ECDH_ES,
                                  contentEncryptionAlgorithm: .A256GCM,
                                  decryptionKey: $0) }
@@ -196,7 +208,7 @@ struct ProtocolSession {
             throw Errors.notInSessionMode
         }
         self.sessionId = nil
-        self.encryption = try ProtocolSession.initDeviceEncryption(clientPrivateKey: clientPrivateKey, serverPublicKey: serverPublicKey)
+        self.encryption = try ProtocolSession.initDeviceEncryption(clientJwePrivateKey: clientJwePrivateKey, serverJwePublicKey: serverJwePublicKey)
         self.mode = .device
     }
 }

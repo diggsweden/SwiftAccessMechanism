@@ -30,24 +30,32 @@ struct APIRequestTests {
         try! ServerParameters(serverIdentifier: "dev.cloud-wallet.digg.se".data(using: .ascii)!)
     }()
 
-    /// Create a test BFFHttpClient with an ephemeral key pair.
-    ///
-    /// Generates a fresh ephemeral P-256 key and registers with the server (overwrite: true for clean slate).
-    private static func getTestClient(baseUrl: String) async throws -> BFFHttpClient {
-        let keyTag = "test-\(UUID().uuidString)"
-        let tagData = keyTag.data(using: .utf8)!
+    /// Creates an ephemeral P-256 key (non-permanent, not in Secure Enclave).
+    private static func makeEphemeralKey(tag: String) throws -> SecKey {
+        let tagData = tag.data(using: .utf8)!
         var error: Unmanaged<CFError>?
         let attrs: NSDictionary = [
             kSecAttrKeyType: kSecAttrKeyTypeECSECPrimeRandom,
             kSecAttrKeySizeInBits: 256,
             kSecPrivateKeyAttrs: [kSecAttrIsPermanent: false, kSecAttrApplicationTag: tagData]
         ]
-        guard let privateKey = SecKeyCreateRandomKey(attrs, &error) else {
+        guard let key = SecKeyCreateRandomKey(attrs, &error) else {
             throw (error?.takeRetainedValue() as? Error) ?? TestError.keyGenerationFailed("key gen failed")
         }
+        return key
+    }
+
+    /// Create a test BFFHttpClient with ephemeral JWS and JWE key pairs.
+    ///
+    /// Generates fresh ephemeral P-256 keys and registers with the server (overwrite: true for clean slate).
+    private static func getTestClient(baseUrl: String) async throws -> BFFHttpClient {
+        let base = "test-\(UUID().uuidString)"
+        let jwsKey = try makeEphemeralKey(tag: base + "-jws")
+        let jweKey = try makeEphemeralKey(tag: base + "-jwe")
+        let identity = BFFIdentity(jwsPrivateKey: jwsKey, jwsKeyTag: base + "-jws",
+                                   jwePrivateKey: jweKey, jweKeyTag: base + "-jwe")
         return try await BFFHttpClient(
-            privateKey: privateKey,
-            keyTag: keyTag,
+            identity: identity,
             serverParameters: testServerParameters,
             baseUrl: baseUrl,
             overwrite: true
@@ -66,7 +74,7 @@ struct APIRequestTests {
         let baseUrl = "http://localhost:8088"
         do {
             let (_, identity) = try await BFFHttpClient.createClient(baseUrl: baseUrl, serverParameters: Self.testServerParameters)
-            print("✅ new_state: clientId=\(identity.clientId) keyTag=\(identity.keyTag)")
+            print("✅ new_state: clientId=\(identity.clientId) keyTag=\(identity.jwsKeyTag)")
             print("   devAuthorizationCode=\(identity.devAuthorizationCode ?? "nil")")
 
             // Restore client from persisted identity
@@ -339,9 +347,9 @@ struct APIRequestTests {
         do {
             // Step 1: Create new client (generates new P-256 key, calls new_state)
             var (api, identity) = try await BFFHttpClient.createClient(baseUrl: baseUrl, serverParameters: Self.testServerParameters)
-            print("✅ Created new client: clientId=\(identity.clientId) keyTag=\(identity.keyTag)")
+            print("✅ Created new client: clientId=\(identity.clientId) keyTag=\(identity.jwsKeyTag)")
             #expect(identity.clientId.isEmpty == false)
-            #expect(identity.keyTag.isEmpty == false)
+            #expect(identity.jwsKeyTag.isEmpty == false)
 
             guard let devAuth = identity.devAuthorizationCode else {
                 print("⚠️ No devAuthorizationCode returned - server may not support dynamic registration")
