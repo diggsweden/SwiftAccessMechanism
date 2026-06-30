@@ -135,13 +135,16 @@ public final class BFFIdentity {
         Logger.sec.debug("\(#function) Loaded key tag=\(self.keyTag)")
     }
 
-    /// Generates a P-256 private key, stored permanently in the Secure Enclave.
-    /// Falls back to a regular Keychain key if SE is unavailable (simulator/Intel Mac).
+    /// Generates a P-256 private key in the Secure Enclave.
     ///
-    /// - Parameter tag: Keychain `applicationTag` to identify the key.
+    /// - Parameters:
+    ///   - tag: Keychain `applicationTag` to identify the key.
+    ///   - allowFallback: If `true`, falls back to a plain Keychain key when SE is unavailable
+    ///     (simulator, Intel Mac). Pass explicitly — the default is `false` (SE required).
     /// - Returns: Reference to the generated private key.
-    /// - Throws: CFError if key generation fails entirely.
-    static func generateKey(tag: String) throws -> SecKey {
+    /// - Throws: CFError if key generation fails, or ``Errors/keyGenerationFailed`` if SE is
+    ///   unavailable and `allowFallback` is `false`.
+    static func generateKey(tag: String, allowFallback: Bool = false) throws -> SecKey {
         Logger.sec.debug("\(#function) Generating key tag=\(tag)")
 
         guard let tagData = tag.data(using: .utf8) else {
@@ -170,7 +173,18 @@ public final class BFFIdentity {
                 Logger.sec.debug("\(#function) Generated SE key tag=\(tag)")
                 return key
             }
-            Logger.sec.debug("\(#function) SE unavailable, falling back: \(error?.takeRetainedValue())")
+            let seError = error?.takeRetainedValue() as Error? ?? Errors.keyGenerationFailed
+            guard allowFallback else {
+                Logger.sec.error("\(#function) SE unavailable, fallback not allowed: \(seError)")
+                throw seError
+            }
+            Logger.sec.warning("\(#function) ⚠️ SE unavailable, using plain Keychain key (allowFallback=true): \(seError)")
+        } else {
+            guard allowFallback else {
+                Logger.sec.error("\(#function) SE access control setup failed, fallback not allowed")
+                throw Errors.keyGenerationFailed
+            }
+            Logger.sec.warning("\(#function) ⚠️ SE access control setup failed, using plain Keychain key (allowFallback=true)")
         }
 
         // Fallback: regular P-256 Keychain key (e.g. simulator, Intel Mac)

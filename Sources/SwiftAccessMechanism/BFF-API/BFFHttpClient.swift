@@ -385,7 +385,11 @@ public struct BFFHttpClient {
         ttl: String? = nil
     ) async throws -> (client: BFFHttpClient, identity: BFFIdentity) {
         let keyTag = UUID().uuidString
+        #if targetEnvironment(simulator) || os(macOS)
+        let privateKey = try BFFIdentity.generateKey(tag: keyTag, allowFallback: true)
+        #else
         let privateKey = try BFFIdentity.generateKey(tag: keyTag)
+        #endif
         let client = try await BFFHttpClient(privateKey: privateKey, keyTag: keyTag, serverParameters: serverParameters, baseUrl: baseUrl)
         return (client, client.identity)
     }
