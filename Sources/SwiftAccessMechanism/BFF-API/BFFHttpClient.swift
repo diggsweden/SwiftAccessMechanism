@@ -28,7 +28,7 @@ public actor BFFHttpClient {
     private let layer: BFFLayer
     private var session: ProtocolSession
 
-    public let clientId: String
+    public let clientId: String?
     public let serverParameters: ServerParameters
 
 #if DEBUG
@@ -37,7 +37,7 @@ public actor BFFHttpClient {
     private let logEnabled = false
 #endif
 
-    init(transport: any HSMTransport, layer: BFFLayer, session: ProtocolSession, clientId: String, serverParameters: ServerParameters) {
+    init(transport: any HSMTransport, layer: BFFLayer, session: ProtocolSession, clientId: String?, serverParameters: ServerParameters) {
         self.transport = transport
         self.layer = layer
         self.session = session
@@ -96,7 +96,7 @@ public actor BFFHttpClient {
     /// resolved the `SecKey` (e.g. from Keychain). No network call is made.
     public static func resume(
         transport: any HSMTransport,
-        clientId: String,
+        clientId: String? = nil,
         privateKey: SecKey,
         serverParameters: ServerParameters
     ) throws -> BFFHttpClient {
@@ -148,7 +148,7 @@ public actor BFFHttpClient {
         }
       
         let identity = BFFIdentity(
-            clientId: stateResponse.clientId,
+            clientId: stateResponse.clientId ?? "",
             keyTag: keyTag,
             devAuthorizationCode: stateResponse.devAuthorizationCode,
             privateKey: privateKey
@@ -173,10 +173,10 @@ public actor BFFHttpClient {
 
     // MARK: - OPAQUE Registration
 
-    public func registration(password: StretchedPIN, stateJws: String? = nil) async throws -> PakeResponse {
-        let start = try layer.registrationStart(password: password, with: session, stateJws: stateJws)
+    public func registration(password: StretchedPIN) async throws -> PakeResponse {
+        let start = try layer.registrationStart(password: password, with: session)
         let startData = try await transport.perform(start.request, operation: .registerPin)
-        let finish = try layer.registrationFinish(start: start, responseData: startData, with: session, stateJws: stateJws)
+        let finish = try layer.registrationFinish(start: start, responseData: startData, with: session)
         let finishData = try await transport.perform(finish, operation: .registerPin)
         let parsed = try BFFLayer.parseAndValidateResponse(from: finishData, with: session, debugLog: logEnabled)
         return try parsed.decodePayload(PakeResponse.self)
@@ -184,10 +184,10 @@ public actor BFFHttpClient {
 
     // MARK: - OPAQUE Authentication
 
-    public func authenticate(password: StretchedPIN, stateJws: String? = nil) async throws -> AuthenticationResult {
-        let start = try layer.authenticateStart(password: password, with: session, stateJws: stateJws)
+    public func authenticate(password: StretchedPIN) async throws -> AuthenticationResult {
+        let start = try layer.authenticateStart(password: password, with: session)
         let startData = try await transport.perform(start.request, operation: .createSession)
-        let finish = try layer.authenticateFinish(start: start, responseData: startData, with: session, stateJws: stateJws)
+        let finish = try layer.authenticateFinish(start: start, responseData: startData, with: session)
         let finishData = try await transport.perform(finish.request, operation: .createSession)
         let parsed = try BFFLayer.parseAndValidateResponse(from: finishData, with: session, debugLog: logEnabled)
         if let sessionId = parsed.outer.sessionId {
@@ -209,10 +209,10 @@ public actor BFFHttpClient {
     /// session is reset to device mode, requiring re-authentication before further requests.
     ///
     /// - Parameter newPassword: Stretched new PIN from ``PINStretch/stretchPin(_:)``.
-    public func changePin(newPassword: StretchedPIN, stateJws: String? = nil) async throws {
-        let start = try layer.changePinStart(newPassword: newPassword, with: session, stateJws: stateJws)
+    public func changePin(newPassword: StretchedPIN) async throws {
+        let start = try layer.changePinStart(newPassword: newPassword, with: session)
         let startData = try await transport.perform(start.request, operation: .changePin)
-        let finishRequest = try layer.changePinFinish(start: start, responseData: startData, with: session, stateJws: stateJws)
+        let finishRequest = try layer.changePinFinish(start: start, responseData: startData, with: session)
         let finishData = try await transport.perform(finishRequest, operation: .changePin)
         _ = try BFFLayer.parseAndValidateResponse(from: finishData, with: session, debugLog: logEnabled)
         try session.exitSession()
@@ -220,45 +220,41 @@ public actor BFFHttpClient {
 
     // MARK: - HSM Operations
 
-    public func createHsmKey(stateJws: String? = nil) async throws -> HsmCreateKeyResponse {
+    public func createHsmKey() async throws -> HsmCreateKeyResponse {
         let req = try layer.createRequest(
             outerRequest: try ProtocolRequest.hsmGenerateKey(),
-            session: session,
-            stateJws: stateJws
+            session: session
         )
         let data = try await transport.perform(req, operation: .createKey)
         let parsed = try BFFLayer.parseAndValidateResponse(from: data, with: session, debugLog: logEnabled)
         return try parsed.decodePayload(HsmCreateKeyResponse.self)
     }
 
-    public func listKeys(stateJws: String? = nil) async throws -> HsmListResponse {
+    public func listKeys() async throws -> HsmListResponse {
         let req = try layer.createRequest(
             outerRequest: try ProtocolRequest.hsmListKeys(),
-            session: session,
-            stateJws: stateJws
+            session: session
         )
         let data = try await transport.perform(req, operation: .listKeys)
         let parsed = try BFFLayer.parseAndValidateResponse(from: data, with: session, debugLog: logEnabled)
         return try parsed.decodePayload(HsmListResponse.self)
     }
 
-    public func sign(hsmKeyId: String, data: Data, stateJws: String? = nil) async throws -> SignatureResponse {
+    public func sign(hsmKeyId: String, data: Data) async throws -> SignatureResponse {
         let digest = Data(SHA256.hash(data: data))
         let req = try layer.createRequest(
             outerRequest: try ProtocolRequest.hsmSign(hsmKid: hsmKeyId, message: digest),
-            session: session,
-            stateJws: stateJws
+            session: session
         )
         let data = try await transport.perform(req, operation: .sign)
         let parsed = try BFFLayer.parseAndValidateResponse(from: data, with: session, debugLog: logEnabled)
         return try parsed.decodePayload(SignatureResponse.self)
     }
 
-    public func deleteKey(hsmKeyId: String, stateJws: String? = nil) async throws {
+    public func deleteKey(hsmKeyId: String) async throws {
         let req = try layer.createRequest(
             outerRequest: try ProtocolRequest.hsmDeleteKey(hsmKid: hsmKeyId),
-            session: session,
-            stateJws: stateJws
+            session: session
         )
         try await transport.perform(req, operation: .deleteKey)
     }

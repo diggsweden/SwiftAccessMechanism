@@ -14,11 +14,14 @@ import Foundation
 // MARK: - API Request Structure
 public struct HSMRequest: Codable, Sendable {
     // Client identifier
-    public let clientId: String
+    public let clientId: String?
     // Compact JWS string containing the signed OuterRequest
     public let outerRequestJws: String
-    // Latest state JWS from the server, forwarded with each operation to maintain state continuity
-    public let stateJws: String?
+
+    public init(clientId: String? = nil, outerRequestJws: String) {
+        self.clientId = clientId
+        self.outerRequestJws = outerRequestJws
+    }
 }
 
 // MARK: - device-states endpoint

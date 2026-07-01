@@ -4,12 +4,12 @@
 import Foundation
 
 public struct RegisterStateResponse: Sendable {
-    public let clientId: String
+    public let clientId: String?
     public let devAuthorizationCode: String?
     public let serverJwsPublicKey: JwkKey?
     public let opaqueServerId: String?
 
-    public init(clientId: String, devAuthorizationCode: String?, serverJwsPublicKey: JwkKey? = nil, opaqueServerId: String? = nil) {
+    public init(clientId: String? = nil, devAuthorizationCode: String?, serverJwsPublicKey: JwkKey? = nil, opaqueServerId: String? = nil) {
         self.clientId = clientId
         self.devAuthorizationCode = devAuthorizationCode
         self.serverJwsPublicKey = serverJwsPublicKey
