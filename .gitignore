@@ -62,5 +62,8 @@ iOSInjectionProject/
 .DS_Store
 
 # Project-specific
-external/
+# Vendored opaque_ke xcframework is committed raw (temporary; see workflow_spm-publish.md).
+# Ignore everything else under external/, but track the xcframework itself.
+external/*
+!external/opaque_ke_uniffiFFI.xcframework
 .netrc

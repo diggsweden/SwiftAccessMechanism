@@ -9,7 +9,9 @@ import PackageDescription
 
 let package = Package(
     name: "SwiftAccessMechanism",
-    platforms: [.macOS(.v14), .iOS(.v16)],
+    // iOS-only: the vendored opaque_ke xcframework ships arm64 device + arm64 simulator
+    // slices only (no macOS/Catalyst, no x86_64). Apple silicon required for the simulator.
+    platforms: [.iOS(.v16)],
     products: [
         // Products define the executables and libraries a package produces, making them visible to other packages.
         .library(

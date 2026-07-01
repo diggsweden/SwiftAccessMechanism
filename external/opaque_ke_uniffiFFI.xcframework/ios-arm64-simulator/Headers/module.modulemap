@@ -1,0 +1,7 @@
+module opaque_ke_uniffiFFI {
+    header "opaque_ke_uniffiFFI.h"
+    export *
+    use "Darwin"
+    use "_Builtin_stdbool"
+    use "_Builtin_stdint"
+}
